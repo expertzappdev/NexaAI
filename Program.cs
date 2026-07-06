@@ -17,13 +17,39 @@ builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"))
 builder.Services.Configure<OpenRouterSettings>(builder.Configuration.GetSection("OpenRouter"));
 
 // Add database context
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? Environment.GetEnvironmentVariable("MYSQL_URL")
+    ?? Environment.GetEnvironmentVariable("DATABASE_URL");
+
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new InvalidOperationException("Database connection string not found. Please configure the 'ConnectionStrings:DefaultConnection' setting, or set 'MYSQL_URL' / 'DATABASE_URL' environment variables.");
+}
+
+// Automatically parse mysql:// URI if provided (common on Render MySQL services)
+if (connectionString.StartsWith("mysql://", StringComparison.OrdinalIgnoreCase))
+{
+    try
+    {
+        var uri = new Uri(connectionString);
+        var userInfo = uri.UserInfo.Split(':');
+        var username = userInfo[0];
+        var password = userInfo.Length > 1 ? userInfo[1] : "";
+        var host = uri.Host;
+        var port = uri.Port > 0 ? uri.Port : 3306;
+        var database = uri.AbsolutePath.TrimStart('/');
+        
+        connectionString = $"Server={host};Port={port};Database={database};Uid={username};Pwd={password};SSL Mode=None;";
+    }
+    catch (Exception ex)
+    {
+        throw new InvalidOperationException("Failed to parse MySQL URI connection string: " + ex.Message, ex);
+    }
+}
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    if (!string.IsNullOrEmpty(connectionString))
-    {
-        options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
-    }
+    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
 });
 
 // Register repositories and services
