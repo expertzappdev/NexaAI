@@ -166,13 +166,26 @@ using (var scope = app.Services.CreateScope())
                                    ex.InnerException?.Message.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase) == true)
         {
             var logger = services.GetRequiredService<ILogger<Program>>();
-            logger.LogWarning("Tables missing. Generating and executing database creation script...");
+            logger.LogWarning("Partial database schema detected. Dropping partial tables and recreating schema...");
             
-            // Table doesn't exist, generate script and execute
-            var sql = context.Database.GenerateCreateScript();
-            context.Database.ExecuteSqlRaw(sql);
-            
-            logger.LogInformation("Database tables created successfully.");
+            try
+            {
+                // Disable foreign key checks to avoid deletion constraint errors during cleanup
+                context.Database.ExecuteSqlRaw("SET FOREIGN_KEY_CHECKS = 0;");
+                context.Database.ExecuteSqlRaw("DROP TABLE IF EXISTS `Messages`;");
+                context.Database.ExecuteSqlRaw("DROP TABLE IF EXISTS `Conversations`;");
+                context.Database.ExecuteSqlRaw("DROP TABLE IF EXISTS `Users`;");
+                context.Database.ExecuteSqlRaw("SET FOREIGN_KEY_CHECKS = 1;");
+                
+                // Recreate database schema
+                context.Database.EnsureCreated();
+                logger.LogInformation("Database schema recreated successfully.");
+            }
+            catch (Exception recreateEx)
+            {
+                logger.LogError(recreateEx, "Failed to drop and recreate database schema.");
+                throw;
+            }
         }
     }
     catch (Exception ex)
