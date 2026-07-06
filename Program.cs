@@ -7,6 +7,8 @@ using AIChatBot.Repositories;
 using AIChatBot.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
@@ -154,7 +156,22 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        context.Database.EnsureCreated();
+        var databaseCreator = context.Database.GetService<IDatabaseCreator>() as IRelationalDatabaseCreator;
+        if (databaseCreator != null)
+        {
+            if (!databaseCreator.Exists())
+            {
+                databaseCreator.Create();
+            }
+            if (!databaseCreator.HasTables())
+            {
+                databaseCreator.CreateTables();
+            }
+        }
+        else
+        {
+            context.Database.EnsureCreated();
+        }
     }
     catch (Exception ex)
     {
