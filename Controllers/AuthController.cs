@@ -1,0 +1,108 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using AIChatBot.Entities;
+using AIChatBot.Models.Requests;
+using AIChatBot.Models.Responses;
+using AIChatBot.Repositories;
+using AIChatBot.Services;
+
+namespace AIChatBot.Controllers
+{
+    [ApiController]
+    [Route("api/auth")]
+    public class AuthController : ControllerBase
+    {
+        private readonly IRepository<User> _userRepository;
+        private readonly IPasswordHasher _passwordHasher;
+        private readonly ITokenService _tokenService;
+        private readonly ILogger<AuthController> _logger;
+
+        public AuthController(
+            IRepository<User> userRepository,
+            IPasswordHasher passwordHasher,
+            ITokenService tokenService,
+            ILogger<AuthController> logger)
+        {
+            _userRepository = userRepository;
+            _passwordHasher = passwordHasher;
+            _tokenService = tokenService;
+            _logger = logger;
+        }
+
+        [HttpPost("register")]
+        public async Task<IActionResult> Register([FromBody] RegisterRequest request, CancellationToken cancellationToken)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var emailNormalized = request.Email.Trim().ToLowerInvariant();
+            
+            // Check if user already exists
+            var existingUser = await _userRepository.GetQueryable()
+                .FirstOrDefaultAsync(u => u.Email == emailNormalized, cancellationToken);
+            if (existingUser != null)
+            {
+                return BadRequest(new AuthResponse { Success = false, ErrorMessage = "A user with this email is already registered." });
+            }
+
+            var user = new User
+            {
+                Name = request.Name,
+                Email = emailNormalized,
+                PasswordHash = _passwordHasher.HashPassword(request.Password),
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _userRepository.AddAsync(user, cancellationToken);
+            await _userRepository.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Successfully registered user {Email}", user.Email);
+
+            var (token, expiresAt) = _tokenService.GenerateToken(user);
+            return Ok(new AuthResponse
+            {
+                Success = true,
+                Token = token,
+                Email = user.Email,
+                Name = user.Name,
+                ExpiresAt = expiresAt
+            });
+        }
+
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var emailNormalized = request.Email.Trim().ToLowerInvariant();
+            
+            var user = await _userRepository.GetQueryable()
+                .FirstOrDefaultAsync(u => u.Email == emailNormalized, cancellationToken);
+            if (user == null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
+            {
+                return Unauthorized(new AuthResponse { Success = false, ErrorMessage = "Invalid email or password." });
+            }
+
+            _logger.LogInformation("Successfully authenticated user {Email}", user.Email);
+
+            var (token, expiresAt) = _tokenService.GenerateToken(user);
+            return Ok(new AuthResponse
+            {
+                Success = true,
+                Token = token,
+                Email = user.Email,
+                Name = user.Name,
+                ExpiresAt = expiresAt
+            });
+        }
+    }
+}

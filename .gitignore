@@ -1,0 +1,168 @@
+################################################
+# .NET / ASP.NET Core
+################################################
+
+# Build results
+bin/
+obj/
+[Bb]uild/
+[Dd]ebug/
+[Rr]elease/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider
+.idea/
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+logs/
+
+# Test results
+TestResults/
+coverage/
+
+# NuGet
+*.nupkg
+packages/
+project.lock.json
+project.assets.json
+
+# Entity Framework
+*.db
+*.sqlite
+*.sqlite3
+
+# Secrets / Environment
+appsettings.Development.json
+appsettings.Local.json
+.env
+.env.*
+secrets.json
+
+
+################################################
+# React / Node / Vite
+################################################
+
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Local env files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# npm
+npm-debug.log*
+package-lock.json
+
+# yarn
+yarn-debug.log*
+yarn-error.log*
+
+# pnpm
+pnpm-debug.log*
+
+# Cache
+.cache/
+.parcel-cache/
+
+# Vite
+.vite/
+
+
+################################################
+# TypeScript
+################################################
+
+*.tsbuildinfo
+
+
+################################################
+# OS Files
+################################################
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Mac
+.DS_Store
+
+
+################################################
+# AI / API Keys / Sensitive Files
+################################################
+
+# OpenRouter Keys
+openrouter.json
+keys.json
+credentials.json
+
+# JWT secrets
+jwt.json
+
+# Certificates
+*.pem
+*.key
+*.pfx
+*.crt
+
+
+################################################
+# Database
+################################################
+
+*.mdf
+*.ldf
+
+database/
+backup/
+
+
+################################################
+# Docker (optional)
+################################################
+
+docker-compose.override.yml
+
+
+################################################
+# Temporary Files
+################################################
+
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+
+################################################
+# Uploads / Generated Files
+################################################
+
+uploads/
+wwwroot/uploads/
+wwwroot/images/
+
+
+################################################
+# Publish Output
+################################################
+
+publish/
+out/
