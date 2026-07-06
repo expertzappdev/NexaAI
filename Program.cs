@@ -149,51 +149,55 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-// Automatically create database and tables if they do not exist
-using (var scope = app.Services.CreateScope())
+// Automatically create database and tables asynchronously if they do not exist
+_ = Task.Run(async () =>
 {
-    var services = scope.ServiceProvider;
-    try
+    // Wait a brief moment to let the server start listening on port first
+    await Task.Delay(1000);
+    
+    using (var scope = app.Services.CreateScope())
     {
-        var context = services.GetRequiredService<ApplicationDbContext>();
-        
-        // Check if the Users table exists by attempting a query
+        var services = scope.ServiceProvider;
+        var logger = services.GetRequiredService<ILogger<Program>>();
         try
         {
-            _ = context.Users.Any();
-        }
-        catch (Exception ex) when (ex.Message.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase) || 
-                                   ex.InnerException?.Message.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase) == true)
-        {
-            var logger = services.GetRequiredService<ILogger<Program>>();
-            logger.LogWarning("Partial database schema detected. Dropping partial tables and recreating schema...");
+            var context = services.GetRequiredService<ApplicationDbContext>();
             
+            // Check if the Users table exists by attempting a query
+            bool schemaExists = false;
             try
             {
+                // Query using async to avoid blocking
+                schemaExists = await context.Users.AnyAsync();
+            }
+            catch (Exception ex) when (ex.Message.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase) || 
+                                       ex.InnerException?.Message.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                schemaExists = false;
+            }
+
+            if (!schemaExists)
+            {
+                logger.LogWarning("Partial or missing database schema detected. Dropping partial tables and recreating schema...");
+                
                 // Disable foreign key checks to avoid deletion constraint errors during cleanup
-                context.Database.ExecuteSqlRaw("SET FOREIGN_KEY_CHECKS = 0;");
-                context.Database.ExecuteSqlRaw("DROP TABLE IF EXISTS `Messages`;");
-                context.Database.ExecuteSqlRaw("DROP TABLE IF EXISTS `Conversations`;");
-                context.Database.ExecuteSqlRaw("DROP TABLE IF EXISTS `Users`;");
-                context.Database.ExecuteSqlRaw("SET FOREIGN_KEY_CHECKS = 1;");
+                await context.Database.ExecuteSqlRawAsync("SET FOREIGN_KEY_CHECKS = 0;");
+                await context.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS `Messages`;");
+                await context.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS `Conversations`;");
+                await context.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS `Users`;");
+                await context.Database.ExecuteSqlRawAsync("SET FOREIGN_KEY_CHECKS = 1;");
                 
                 // Recreate database schema
-                context.Database.EnsureCreated();
+                await context.Database.EnsureCreatedAsync();
                 logger.LogInformation("Database schema recreated successfully.");
             }
-            catch (Exception recreateEx)
-            {
-                logger.LogError(recreateEx, "Failed to drop and recreate database schema.");
-                throw;
-            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "An error occurred while ensuring the database schema was created in the background.");
         }
     }
-    catch (Exception ex)
-    {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while ensuring the database schema was created.");
-    }
-}
+});
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
