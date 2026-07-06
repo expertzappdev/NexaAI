@@ -81,7 +81,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("CorsPolicy", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:3000") // standard React/Vite development ports
+        policy.WithOrigins("http://localhost:5173", "http://localhost:3000", "https://client-seven-jet-40.vercel.app") // standard React/Vite development ports and Vercel production
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
