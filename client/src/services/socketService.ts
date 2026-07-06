@@ -1,0 +1,107 @@
+import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
+
+class SocketService {
+  private connection: HubConnection | null = null;
+  private token: string | null = null;
+
+  public async connect(
+    token: string,
+    onReceiveMessage: (payload: { role: string; content: string; createdAt: string }) => void,
+    onTypingStarted: () => void,
+    onTypingStopped: () => void,
+    onErrorMessage: (error: string) => void,
+    onConnectionChange: (connected: boolean) => void
+  ): Promise<void> {
+    if (this.connection) {
+      if (this.connection.state === HubConnectionState.Connected) {
+        if (this.token === token) {
+          // Already connected with the same token
+          return;
+        } else {
+          // Token changed, disconnect first
+          await this.disconnect();
+        }
+      }
+    }
+
+    this.token = token;
+
+    this.connection = new HubConnectionBuilder()
+      .withUrl('http://localhost:5000/chatHub', {
+        accessTokenFactory: () => token,
+      })
+      .withAutomaticReconnect()
+      .configureLogging(LogLevel.Information)
+      .build();
+
+    // Set up listeners
+    this.connection.on('ReceiveMessage', (payload) => {
+      onReceiveMessage(payload);
+    });
+
+    this.connection.on('TypingStarted', () => {
+      onTypingStarted();
+    });
+
+    this.connection.on('TypingStopped', () => {
+      onTypingStopped();
+    });
+
+    this.connection.on('ErrorMessage', (errorMsg) => {
+      onErrorMessage(errorMsg);
+    });
+
+    this.connection.onreconnecting((error) => {
+      console.warn('SignalR reconnecting due to error:', error);
+      onConnectionChange(false);
+    });
+
+    this.connection.onreconnected(() => {
+      console.log('SignalR reconnected successfully.');
+      onConnectionChange(true);
+    });
+
+    this.connection.onclose((error) => {
+      console.error('SignalR connection closed:', error);
+      onConnectionChange(false);
+    });
+
+    try {
+      await this.connection.start();
+      console.log('SignalR connection established.');
+      onConnectionChange(true);
+    } catch (err) {
+      console.error('Error establishing SignalR connection:', err);
+      onConnectionChange(false);
+      throw err;
+    }
+  }
+
+  public async disconnect(): Promise<void> {
+    if (this.connection) {
+      try {
+        await this.connection.stop();
+        console.log('SignalR connection stopped.');
+      } catch (err) {
+        console.error('Error stopping SignalR connection:', err);
+      } finally {
+        this.connection = null;
+        this.token = null;
+      }
+    }
+  }
+
+  public async sendMessage(conversationId: number, message: string): Promise<void> {
+    if (!this.connection || this.connection.state !== HubConnectionState.Connected) {
+      throw new Error('Cannot send message. SignalR is not connected.');
+    }
+    await this.connection.invoke('SendMessage', conversationId, message);
+  }
+
+  public isConnected(): boolean {
+    return this.connection?.state === HubConnectionState.Connected;
+  }
+}
+
+const socketService = new SocketService();
+export default socketService;
