@@ -156,21 +156,23 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        var databaseCreator = context.Database.GetService<IDatabaseCreator>() as IRelationalDatabaseCreator;
-        if (databaseCreator != null)
+        
+        // Check if the Users table exists by attempting a query
+        try
         {
-            if (!databaseCreator.Exists())
-            {
-                databaseCreator.Create();
-            }
-            if (!databaseCreator.HasTables())
-            {
-                databaseCreator.CreateTables();
-            }
+            _ = context.Users.Any();
         }
-        else
+        catch (Exception ex) when (ex.Message.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase) || 
+                                   ex.InnerException?.Message.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase) == true)
         {
-            context.Database.EnsureCreated();
+            var logger = services.GetRequiredService<ILogger<Program>>();
+            logger.LogWarning("Tables missing. Generating and executing database creation script...");
+            
+            // Table doesn't exist, generate script and execute
+            var sql = context.Database.GenerateCreateScript();
+            context.Database.ExecuteSqlRaw(sql);
+            
+            logger.LogInformation("Database tables created successfully.");
         }
     }
     catch (Exception ex)
