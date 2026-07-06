@@ -66,7 +66,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             {
               id: Date.now() + Math.random(),
               conversationId: currentId || 0,
-              role: msg.role,
+              role: msg.role as 'system' | 'user' | 'assistant',
               content: msg.content,
               createdAt: msg.createdAt,
             },
