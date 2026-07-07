@@ -13,16 +13,16 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
   const title = activeConv ? activeConv.title : 'New Chat';
 
   return (
-    <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-white/95 dark:bg-zinc-950/95 border-b border-gray-200 dark:border-zinc-900 sticky top-0 z-30 backdrop-blur-md">
+    <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-zinc-950/95 border-b border-zinc-900 sticky top-0 z-30 backdrop-blur-md">
       <div className="flex items-center space-x-3 min-w-0">
         <button
           onClick={onMenuClick}
-          className="text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-200 p-1.5 rounded-lg hover:bg-gray-150 dark:hover:bg-zinc-900 focus:outline-none"
+          className="text-zinc-400 hover:text-zinc-200 p-1.5 rounded-lg hover:bg-zinc-900 focus:outline-none"
         >
           <Menu className="w-5 h-5" />
         </button>
 
-        <span className="text-sm font-semibold text-gray-800 dark:text-zinc-200 truncate">{title}</span>
+        <span className="text-sm font-semibold text-zinc-200 truncate">{title}</span>
       </div>
 
       <div className="flex items-center space-x-2">

@@ -18,9 +18,8 @@ interface ChatContextType {
   activeConversationId: number | null;
   messages: Message[];
   isLoading: boolean;
-  theme: 'light' | 'dark';
   socketConnected: boolean;
-  login: (token: string, email: string, name: string) => void;
+  login: (token: string, user: { id: number; name: string; email: string }) => void;
   logout: () => void;
   loadConversations: () => Promise<void>;
   selectConversation: (id: number) => Promise<void>;
@@ -28,7 +27,6 @@ interface ChatContextType {
   renameConversation: (id: number, title: string) => Promise<boolean>;
   deleteConversation: (id: number) => Promise<boolean>;
   sendMessage: (text: string) => Promise<void>;
-  toggleTheme: () => void;
   clearMessages: () => void;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -42,7 +40,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [socketConnected, setSocketConnected] = useState<boolean>(false);
 
@@ -119,83 +116,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [token]);
 
-  // Load initial configurations (token, user, theme)
+  // Load initial configurations (token, user)
   useEffect(() => {
-    const savedTheme = localStorage.getItem('chatbot_theme') as 'light' | 'dark';
-    if (savedTheme) {
-      setTheme(savedTheme);
-      document.documentElement.classList.toggle('dark', savedTheme === 'dark');
-    } else {
-      document.documentElement.classList.add('dark');
-    }
+    // Keep dark mode permanently
+    document.documentElement.classList.add('dark');
+    localStorage.setItem('chatbot_theme', 'dark');
 
-    ensureGuestSession();
-  }, []);
-
-  const ensureGuestSession = async () => {
     const savedToken = localStorage.getItem('chatbot_token');
     const savedUser = localStorage.getItem('chatbot_user');
-
-    if (savedToken && savedUser && savedToken !== 'bypass-token') {
+    if (savedToken && savedUser) {
       setToken(savedToken);
       setUser(JSON.parse(savedUser));
-      // Load conversations since we have a valid token
-      try {
-        const response = await apiClient.get<Conversation[]>('/conversations');
-        setConversations(response.data);
-      } catch (err) {
-        console.error('Failed to load conversations', err);
-      }
-      return;
     }
-
-    // Try silent login
-    try {
-      const loginRes = await apiClient.post('/auth/login', {
-        email: 'guest@example.com',
-        password: 'GuestPassword123!',
-      });
-      if (loginRes.data.success && loginRes.data.token) {
-        const t = loginRes.data.token;
-        const u = { id: 1, email: 'guest@example.com', name: 'Guest User', createdAt: new Date().toISOString() };
-        localStorage.setItem('chatbot_token', t);
-        localStorage.setItem('chatbot_user', JSON.stringify(u));
-        setToken(t);
-        setUser(u);
-        
-        // Load conversations
-        const convRes = await apiClient.get<Conversation[]>('/conversations');
-        setConversations(convRes.data);
-        return;
-      }
-    } catch (err) {
-      console.log('Silent login failed, trying silent registration...');
-    }
-
-    // Try silent registration
-    try {
-      const regRes = await apiClient.post('/auth/register', {
-        name: 'Guest User',
-        email: 'guest@example.com',
-        password: 'GuestPassword123!',
-      });
-      if (regRes.data.success && regRes.data.token) {
-        const t = regRes.data.token;
-        const u = { id: 1, email: 'guest@example.com', name: 'Guest User', createdAt: new Date().toISOString() };
-        localStorage.setItem('chatbot_token', t);
-        localStorage.setItem('chatbot_user', JSON.stringify(u));
-        setToken(t);
-        setUser(u);
-        
-        // Load conversations
-        const convRes = await apiClient.get<Conversation[]>('/conversations');
-        setConversations(convRes.data);
-      }
-    } catch (err) {
-      console.error('Silent registration failed', err);
-      showToast('Could not establish backend session. Please check database connection.', 'error');
-    }
-  };
+  }, []);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now();
@@ -209,13 +142,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const login = (tokenValue: string, email: string, name: string) => {
+  const login = (tokenValue: string, userObj: { id: number; name: string; email: string }) => {
     localStorage.setItem('chatbot_token', tokenValue);
-    const mockUser: User = { id: 0, email, name, createdAt: new Date().toISOString() };
-    localStorage.setItem('chatbot_user', JSON.stringify(mockUser));
+    const mappedUser: User = { 
+      id: userObj.id, 
+      email: userObj.email, 
+      name: userObj.name, 
+      createdAt: new Date().toISOString() 
+    };
+    localStorage.setItem('chatbot_user', JSON.stringify(mappedUser));
     setToken(tokenValue);
-    setUser(mockUser);
-    showToast(`Welcome back, ${name}!`, 'success');
+    setUser(mappedUser);
+    showToast(`Welcome back, ${userObj.name}!`, 'success');
   };
 
   const logout = () => {
@@ -227,13 +165,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActiveConversationId(null);
     setMessages([]);
     showToast('Signed out successfully', 'info');
-  };
-
-  const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(nextTheme);
-    localStorage.setItem('chatbot_theme', nextTheme);
-    document.documentElement.classList.toggle('dark', nextTheme === 'dark');
   };
 
   const loadConversations = async () => {
@@ -343,7 +274,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         activeConversationId,
         messages,
         isLoading,
-        theme,
         socketConnected,
         login,
         logout,
@@ -353,7 +283,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         renameConversation,
         deleteConversation,
         sendMessage,
-        toggleTheme,
         clearMessages,
         showToast,
       }}

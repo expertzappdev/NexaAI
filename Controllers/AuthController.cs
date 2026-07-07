@@ -71,9 +71,12 @@ namespace AIChatBot.Controllers
             {
                 Success = true,
                 Token = token,
-                Email = user.Email,
-                Name = user.Name,
-                ExpiresAt = expiresAt
+                User = new AuthUserDto
+                {
+                    Id = user.Id,
+                    Name = user.Name,
+                    Email = user.Email
+                }
             });
         }
 
@@ -101,9 +104,12 @@ namespace AIChatBot.Controllers
             {
                 Success = true,
                 Token = token,
-                Email = user.Email,
-                Name = user.Name,
-                ExpiresAt = expiresAt
+                User = new AuthUserDto
+                {
+                    Id = user.Id,
+                    Name = user.Name,
+                    Email = user.Email
+                }
             });
         }
 
