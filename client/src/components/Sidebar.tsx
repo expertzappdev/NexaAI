@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogOut, Plus, Search, Sparkles, X } from 'lucide-react';
+import { LogOut, Plus, X, Home, Folder, BarChart3, Settings, HelpCircle } from 'lucide-react';
 import { useChat } from '../store/ChatContext';
 import ConversationItem from './ConversationItem';
 
@@ -10,16 +10,19 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { conversations, createConversation, user, logout } = useChat();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'home' | 'projects' | 'analytics' | 'settings'>('home');
 
   const handleNewChat = async () => {
     await createConversation("New Chat");
     onClose(); // close drawer on mobile if open
   };
 
-  const filteredConversations = conversations.filter((c) =>
-    c.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const navItems = [
+    { id: 'home', label: 'Home', icon: Home },
+    { id: 'projects', label: 'Projects', icon: Folder },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ] as const;
 
   return (
     <>
@@ -37,82 +40,104 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Header section */}
+        {/* Header section (Nexa AI logo with glow + Title) */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-900">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-blue-600 flex items-center justify-center shadow-md text-white">
-              <Sparkles className="w-4.5 h-4.5" />
+            <div className="relative w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 via-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.3)] text-white border border-white/10">
+              <span className="text-base font-extrabold font-sans">N</span>
             </div>
-            <span className="font-bold text-base text-zinc-150 tracking-tight text-white">Nexa AI</span>
+            <span className="font-extrabold text-lg text-white tracking-tight">Nexa AI</span>
           </div>
           {/* Close button for mobile drawer */}
           <button
             onClick={onClose}
-            className="lg:hidden text-gray-400 hover:text-zinc-200 focus:outline-none"
+            className="lg:hidden text-zinc-400 hover:text-zinc-200 focus:outline-none"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Action Button: New Chat */}
-        <div className="px-4 pt-4">
+        {/* Action Button: New Chat (Light Blue Style) */}
+        <div className="px-4 pt-5 pb-3">
           <button
             onClick={handleNewChat}
-            className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-all shadow-sm shadow-indigo-600/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 font-semibold text-sm transition-all focus:outline-none"
           >
             <Plus className="w-4 h-4" />
             <span>New Chat</span>
           </button>
         </div>
 
-        {/* Search bar */}
-        <div className="px-4 py-3 relative">
-          <Search className="absolute left-7 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-          <input
-            type="text"
-            placeholder="Search chats..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
-          />
-        </div>
+        {/* Premium Linear/Vercel Style Navigation Menu */}
+        <nav className="px-3 space-y-1 py-2">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all focus:outline-none ${
+                  isActive
+                    ? 'bg-zinc-900 text-white border-l-2 border-blue-500 shadow-inner'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
+                }`}
+              >
+                <Icon className={`w-4 h-4 ${isActive ? 'text-blue-400' : 'text-zinc-500'}`} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
 
-        {/* Conversation list area */}
-        <div className="flex-grow overflow-y-auto px-2 space-y-1 py-2">
-          {filteredConversations.length > 0 ? (
-            filteredConversations.map((conv) => (
-              <ConversationItem key={conv.id} conversation={conv} />
-            ))
-          ) : (
-            <div className="text-center py-8 text-xs text-zinc-650">
-              {searchQuery ? 'No matching conversations' : 'No chat history'}
-            </div>
-          )}
-        </div>
-
-        {/* Footer (Profile + logout) */}
-        <div className="p-4 border-t border-zinc-900 bg-zinc-950/50">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3 min-w-0">
-              <div className="w-9 h-9 rounded-full bg-indigo-950/40 text-indigo-400 flex items-center justify-center font-bold text-sm flex-shrink-0">
-                {user?.name ? user.name[0].toUpperCase() : 'U'}
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-zinc-200 truncate">{user?.name || 'User'}</p>
-                <p className="text-[10px] text-zinc-500 truncate">{user?.email}</p>
-              </div>
-            </div>
+        {/* Conversation List / History */}
+        <div className="flex-grow overflow-y-auto px-3 border-t border-zinc-900/50 mt-2 pt-2">
+          <div className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+            Recent Conversations
           </div>
+          <div className="space-y-1 mt-1">
+            {conversations.length > 0 ? (
+              conversations.map((conv) => (
+                <ConversationItem key={conv.id} conversation={conv} />
+              ))
+            ) : (
+              <div className="text-center py-6 text-xs text-zinc-600 font-medium">
+                No conversations
+              </div>
+            )}
+          </div>
+        </div>
 
-          <div className="flex items-center justify-between gap-2">
-            {/* Logout Button */}
-            <button
-              onClick={logout}
-              className="w-full flex items-center justify-center space-x-2 py-2 px-3 rounded-xl border border-zinc-800 hover:bg-red-950/20 text-zinc-400 hover:text-red-400 transition-colors focus:outline-none text-xs font-semibold"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>Logout</span>
-            </button>
+        {/* Footer Layout: Support + Logout + User Badge */}
+        <div className="p-4 border-t border-zinc-900 bg-zinc-950/80 space-y-3">
+          {/* Support Link */}
+          <button className="w-full flex items-center space-x-3 px-3 py-2.5 text-zinc-400 hover:text-zinc-200 transition-colors text-sm font-medium focus:outline-none">
+            <HelpCircle className="w-4.5 h-4.5 text-zinc-500" />
+            <span>Support</span>
+          </button>
+
+          {/* Logout Trigger */}
+          <button
+            onClick={logout}
+            className="w-full flex items-center space-x-3 px-3 py-2.5 text-zinc-400 hover:text-red-400 transition-colors text-sm font-medium focus:outline-none"
+          >
+            <LogOut className="w-4.5 h-4.5 text-zinc-500" />
+            <span>Logout</span>
+          </button>
+
+          {/* User Profile Badge (Vercel Style Card) */}
+          <div className="flex items-center space-x-3 p-3 rounded-xl bg-zinc-900/40 border border-zinc-900/80 mt-2">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black text-sm flex-shrink-0 border border-white/10 shadow-[0_0_10px_rgba(99,102,241,0.2)]">
+              {user?.name ? user.name[0].toUpperCase() : 'U'}
+            </div>
+            <div className="min-w-0 flex-grow">
+              <p className="text-xs font-bold text-zinc-100 truncate">{user?.name || 'Alex Rivera'}</p>
+              <div className="flex items-center space-x-1.5 mt-0.5">
+                <span className="text-[9px] font-black tracking-wider uppercase px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                  Pro Member
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </aside>

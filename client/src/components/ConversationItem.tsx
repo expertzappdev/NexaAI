@@ -44,12 +44,12 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ conversation }) => 
       onClick={handleSelect}
       className={`group relative flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition-all ${
         isActive
-          ? 'bg-zinc-150 dark:bg-zinc-800 text-zinc-950 dark:text-white font-medium'
-          : 'text-gray-600 dark:text-zinc-400 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/40 hover:text-gray-900 dark:hover:text-zinc-200'
+          ? 'bg-zinc-900 text-white font-medium border-l-2 border-indigo-500 shadow-inner'
+          : 'text-zinc-400 hover:bg-zinc-900/20 hover:text-zinc-200'
       }`}
     >
       <div className="flex items-center space-x-2.5 min-w-0 flex-grow">
-        <MessageSquare className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-indigo-500' : 'text-gray-400'}`} />
+        <MessageSquare className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-indigo-400' : 'text-zinc-500'}`} />
 
         {isEditing ? (
           <form onSubmit={handleRename} onClick={(e) => e.stopPropagation()} className="flex items-center space-x-1 flex-grow">
@@ -57,7 +57,7 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ conversation }) => 
               type="text"
               value={titleInput}
               onChange={(e) => setTitleInput(e.target.value)}
-              className="w-full bg-zinc-200 dark:bg-zinc-700 text-xs px-2 py-1 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 text-gray-900 dark:text-white"
+              className="w-full bg-zinc-800 text-xs px-2 py-1 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500 text-white"
               autoFocus
             />
             <button type="submit" className="text-emerald-500 hover:text-emerald-600 p-0.5">
@@ -81,19 +81,19 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ conversation }) => 
 
       {/* Action buttons (Trash and Edit) shown on hover */}
       {!isEditing && !isDeleting && (
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-l from-zinc-100 dark:from-zinc-900 via-zinc-100 dark:via-zinc-900 pl-3">
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-950 pl-3">
           <button
             onClick={(e) => {
               e.stopPropagation();
               setIsEditing(true);
             }}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-zinc-200 p-1 rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-800 transition-colors"
+            className="text-zinc-400 hover:text-zinc-250 p-1 rounded-lg hover:bg-zinc-800 transition-colors"
           >
             <Edit2 className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={handleDelete}
-            className="text-gray-400 hover:text-red-500 p-1 rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-850 transition-colors"
+            className="text-zinc-400 hover:text-red-400 p-1 rounded-lg hover:bg-zinc-800 transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>

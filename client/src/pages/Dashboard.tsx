@@ -8,19 +8,19 @@ const Dashboard: React.FC = () => {
   const { loadConversations } = useChat();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Fetch conversations on component mount
   useEffect(() => {
+    document.title = 'Nexa AI - Workspace';
     loadConversations();
   }, []);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-white dark:bg-zinc-950 transition-colors">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#050505] text-zinc-150 transition-colors">
       {/* Sidebar drawer control */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Main viewport */}
       <div className="flex-grow flex flex-col min-w-0 h-full relative">
-        {/* Mobile Header navbar */}
+        {/* Header navbar */}
         <Navbar onMenuClick={() => setSidebarOpen(true)} />
 
         {/* Chat Feed & Textarea */}

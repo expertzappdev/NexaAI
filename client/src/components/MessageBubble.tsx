@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Bot, User, Copy, Check } from 'lucide-react';
+import { User, Copy, Check } from 'lucide-react';
 import type { Message } from '../types';
 import MarkdownRenderer from './MarkdownRenderer';
 
@@ -35,35 +35,35 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className={`flex items-start space-x-3 max-w-[85%] ${isUser ? 'ml-auto flex-row-reverse space-x-reverse' : 'mr-auto'}`}
+      className={`flex items-start space-x-3.5 max-w-[85%] ${isUser ? 'ml-auto flex-row-reverse space-x-reverse' : 'mr-auto'}`}
     >
       {/* Avatar */}
-      <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${
+      <div className={`w-8.5 h-8.5 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm border border-white/5 ${
         isUser 
-          ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300' 
-          : 'bg-gradient-to-tr from-indigo-500 to-blue-600 text-white'
+          ? 'bg-zinc-800 text-zinc-350' 
+          : 'bg-gradient-to-tr from-blue-600 via-indigo-500 to-purple-600 text-white font-black text-sm shadow-[0_0_12px_rgba(99,102,241,0.25)]'
       }`}>
-        {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+        {isUser ? <User className="w-4 h-4" /> : <span>N</span>}
       </div>
 
       {/* Bubble Content Area */}
-      <div className="flex flex-col space-y-1">
+      <div className="flex flex-col space-y-1 min-w-0">
         {/* Name Header */}
-        <span className={`text-[11px] font-semibold text-gray-400 dark:text-gray-500 ${isUser ? 'text-right' : 'text-left'}`}>
-          {isUser ? 'You' : 'AI Assistant'}
+        <span className={`text-[10px] font-bold text-zinc-500 uppercase tracking-widest ${isUser ? 'text-right' : 'text-left'}`}>
+          {isUser ? 'You' : 'Nexa AI'}
         </span>
 
         {/* Message bubble itself */}
-        <div className={`relative group p-4 rounded-2xl shadow-sm ${
+        <div className={`relative group p-4.5 rounded-2xl shadow-lg border ${
           isUser 
-            ? 'chat-bubble-user rounded-tr-none' 
-            : 'chat-bubble-ai rounded-tl-none'
+            ? 'bg-gradient-to-tr from-blue-600 to-purple-600 border-indigo-500/25 text-white rounded-tr-none shadow-purple-600/5' 
+            : 'bg-zinc-900/40 backdrop-blur-md border-zinc-800/80 text-zinc-150 rounded-tl-none'
         }`}>
           {/* Copy Button (visible on hover) */}
           <button
             onClick={handleCopy}
-            className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-gray-50/80 hover:bg-gray-100 dark:bg-zinc-800/80 dark:hover:bg-zinc-800 transition-all text-gray-400 hover:text-gray-600 dark:hover:text-zinc-200 focus:outline-none focus:opacity-100 ${
-              isUser ? 'text-zinc-200 hover:text-white dark:bg-indigo-900/60 dark:hover:bg-indigo-900 bg-indigo-700/60' : ''
+            className={`absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-800 transition-all text-zinc-400 hover:text-zinc-200 focus:outline-none focus:opacity-100 ${
+              isUser ? 'text-zinc-200 hover:text-white bg-indigo-900/60 hover:bg-indigo-900' : ''
             }`}
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
@@ -78,7 +78,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
           {/* Bubble Footer (Time and Analytics) */}
           <div className={`flex items-center space-x-2 mt-2 text-[10px] ${
-            isUser ? 'justify-end text-indigo-200/80' : 'justify-start text-gray-400 dark:text-zinc-500'
+            isUser ? 'justify-end text-zinc-200/85' : 'justify-start text-zinc-500'
           }`}>
             <span>{formatTime(message.createdAt)}</span>
             
@@ -86,7 +86,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             {!isUser && message.model && (
               <>
                 <span>•</span>
-                <span className="font-mono bg-gray-100 dark:bg-zinc-800/60 px-1 py-0.5 rounded text-[9px]">{message.model}</span>
+                <span className="font-mono bg-zinc-800/60 border border-zinc-850 px-1 py-0.5 rounded text-[8px] tracking-tight">{message.model}</span>
               </>
             )}
             {!isUser && message.totalTokens && (
