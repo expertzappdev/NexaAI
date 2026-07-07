@@ -29,9 +29,11 @@ export interface AuthResponse {
   success: boolean;
   token?: string;
   errorMessage?: string;
-  email?: string;
-  name?: string;
-  expiresAt?: string;
+  user?: {
+    id: number;
+    name: string;
+    email: string;
+  };
 }
 
 export interface ChatResponse {

@@ -37,8 +37,8 @@ const MessageInput: React.FC = () => {
   };
 
   return (
-    <div className="border-t border-gray-100 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md px-4 py-4">
-      <div className="max-w-3xl mx-auto relative flex items-end border border-gray-200 dark:border-zinc-800 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500 transition-all p-2 pr-3">
+    <div className="border-t border-zinc-900 bg-zinc-950/80 backdrop-blur-md px-4 py-4">
+      <div className="max-w-3xl mx-auto relative flex items-end border border-zinc-800 rounded-2xl bg-zinc-900 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-500 transition-all p-2 pr-3">
         <textarea
           ref={textareaRef}
           rows={1}
@@ -47,7 +47,7 @@ const MessageInput: React.FC = () => {
           onKeyDown={handleKeyDown}
           placeholder="Ask anything..."
           disabled={isLoading}
-          className="flex-grow resize-none border-0 bg-transparent text-sm text-gray-800 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 focus:ring-0 focus:outline-none px-3 py-2 max-h-[180px] min-h-[36px] overflow-y-auto"
+          className="flex-grow resize-none border-0 bg-transparent text-sm text-zinc-150 placeholder-zinc-550 focus:ring-0 focus:outline-none px-3 py-2 max-h-[180px] min-h-[36px] overflow-y-auto"
         />
 
         <button
@@ -56,7 +56,7 @@ const MessageInput: React.FC = () => {
           className={`flex items-center justify-center w-8 h-8 rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${
             text.trim() && !isLoading
               ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-600/10'
-              : 'bg-gray-100 dark:bg-zinc-800 text-gray-300 dark:text-zinc-600 cursor-not-allowed'
+              : 'bg-zinc-850 text-zinc-600 cursor-not-allowed'
           }`}
         >
           {isLoading ? (
@@ -66,8 +66,8 @@ const MessageInput: React.FC = () => {
           )}
         </button>
       </div>
-      <p className="text-[10px] text-center text-gray-400 dark:text-zinc-600 mt-2">
-        AI Chatbot may display inaccurate info. Verify credentials and responses.
+      <p className="text-[10px] text-center text-zinc-550 mt-2">
+        Nexa AI may display inaccurate info. Verify credentials and responses.
       </p>
     </div>
   );
