@@ -55,6 +55,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 });
 
 // Register repositories and services
+builder.Services.AddHttpClient();
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddScoped<IOpenRouterService, OpenRouterService>();
