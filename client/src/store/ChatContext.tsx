@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
 import type { Conversation, Message, User } from '../types';
 import apiClient from '../api/client';
-import socketService from '../services/socketService';
+import socketService from '../services/signalrService';
 
 interface Toast {
   id: number;
