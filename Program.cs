@@ -56,6 +56,11 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 // Register repositories and services
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("OpenRouterClient", (sp, client) =>
+{
+    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OpenRouterSettings>>().Value;
+    client.BaseAddress = new Uri(settings.BaseUrl);
+});
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddScoped<IOpenRouterService, OpenRouterService>();
