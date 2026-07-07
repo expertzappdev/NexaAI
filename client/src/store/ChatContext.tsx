@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
 import type { Conversation, Message, User } from '../types';
 import apiClient from '../api/client';
+import socketService from '../services/signalrService';
 
 interface Toast {
   id: number;
@@ -18,6 +19,7 @@ interface ChatContextType {
   messages: Message[];
   isLoading: boolean;
   theme: 'light' | 'dark';
+  socketConnected: boolean;
   login: (token: string, email: string, name: string) => void;
   logout: () => void;
   loadConversations: () => Promise<void>;
@@ -42,6 +44,80 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [socketConnected, setSocketConnected] = useState<boolean>(false);
+
+  // Store activeConversationId in a ref to avoid stale closures in socket event handlers
+  const activeConversationIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    activeConversationIdRef.current = activeConversationId;
+  }, [activeConversationId]);
+
+  // Handle SignalR connection lifecycle and event listeners
+  useEffect(() => {
+    if (token) {
+      socketService.connect(
+        token,
+        (msg) => {
+          // Verify if message belongs to active conversation
+          const currentId = activeConversationIdRef.current;
+          
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: Date.now() + Math.random(),
+              conversationId: currentId || 0,
+              role: msg.role as 'system' | 'user' | 'assistant',
+              content: msg.content,
+              createdAt: msg.createdAt,
+            },
+          ]);
+
+          // Touch update time of conversation in list
+          if (currentId) {
+            setConversations((prev) =>
+              prev.map((c) => (c.id === currentId ? { ...c, updatedAt: new Date().toISOString() } : c))
+            );
+          }
+        },
+        () => {
+          setIsLoading(true);
+        },
+        () => {
+          setIsLoading(false);
+        },
+        (errorMsg) => {
+          showToast(errorMsg, 'error');
+          // Append error message to screen
+          const currentId = activeConversationIdRef.current;
+          if (currentId) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: Date.now() + Math.random(),
+                conversationId: currentId,
+                role: 'assistant',
+                content: `Error: ${errorMsg}`,
+                createdAt: new Date().toISOString(),
+              },
+            ]);
+          }
+        },
+        (connected) => {
+          setSocketConnected(connected);
+        }
+      ).catch((err) => {
+        console.error('SignalR init connection failure:', err);
+        showToast('SignalR Connection Failed.', 'error');
+      });
+    } else {
+      socketService.disconnect();
+      setSocketConnected(false);
+    }
+
+    return () => {
+      // Disconnect handled explicitly or when token resets to null
+    };
+  }, [token]);
 
   // Load initial configurations (token, user, theme)
   useEffect(() => {
@@ -245,51 +321,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       targetConvId = newId;
     }
 
-    // Append local user message optimistically
-    const userMsg: Message = {
-      id: Date.now(), // temporary ID
-      conversationId: targetConvId,
-      role: 'user',
-      content: text,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    setIsLoading(true);
-
     try {
-      const response = await apiClient.post<{ message: string; model?: string; totalTokens?: number }>('/chat/message', {
-        conversationId: targetConvId,
-        message: text,
-      });
-
-      const assistantMsg: Message = {
-        id: Date.now() + 1,
-        conversationId: targetConvId,
-        role: 'assistant',
-        content: response.data.message,
-        model: response.data.model,
-        totalTokens: response.data.totalTokens,
-        createdAt: new Date().toISOString(),
-      };
-
-      setMessages((prev) => [...prev, assistantMsg]);
-      // Touch update time of conversation list
-      setConversations((prev) =>
-        prev.map((c) => (c.id === targetConvId ? { ...c, updatedAt: new Date().toISOString() } : c))
-      );
+      await socketService.sendMessage(targetConvId, text);
     } catch (error) {
-      console.error('Failed to send message', error);
-      showToast('Server error. Could not retrieve response.', 'error');
-      const errMsg: Message = {
-        id: Date.now() + 1,
-        conversationId: targetConvId,
-        role: 'assistant',
-        content: 'Error: Could not retrieve response from AI. Please check your network connection.',
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, errMsg]);
-    } finally {
-      setIsLoading(false);
+      console.error('Failed to send message via SignalR', error);
+      showToast('Failed to send message. Connecting...', 'error');
     }
   };
 
@@ -308,6 +344,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         messages,
         isLoading,
         theme,
+        socketConnected,
         login,
         logout,
         loadConversations,
@@ -343,7 +380,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             >
               <div className="flex gap-2.5 items-start">
                 {t.type === 'success' && <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-500 mt-0.5" />}
-                {t.type === 'error' && <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-505 mt-0.5" />}
+                {t.type === 'error' && <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-500 mt-0.5" />}
                 {t.type === 'info' && <Info className="w-5 h-5 flex-shrink-0 text-indigo-500 mt-0.5" />}
                 <p className="text-xs font-semibold leading-relaxed">{t.message}</p>
               </div>
