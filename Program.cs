@@ -109,7 +109,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("CorsPolicy", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:3000", "https://client-seven-jet-40.vercel.app") // standard React/Vite development ports and Vercel production
+        policy.SetIsOriginAllowed(origin => true) // allows localhost, dynamic Vercel previews, etc.
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -162,34 +162,26 @@ _ = Task.Run(async () =>
         try
         {
             var context = services.GetRequiredService<ApplicationDbContext>();
+            var databaseCreator = context.Database.GetService<IDatabaseCreator>() as RelationalDatabaseCreator;
             
-            // Check if the Users table exists by attempting a query
-            bool schemaExists = false;
-            try
+            if (databaseCreator != null)
             {
-                // Query using async to avoid blocking
-                schemaExists = await context.Users.AnyAsync();
-            }
-            catch (Exception ex) when (ex.Message.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase) || 
-                                       ex.InnerException?.Message.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase) == true)
-            {
-                schemaExists = false;
-            }
+                if (!await databaseCreator.ExistsAsync())
+                {
+                    logger.LogInformation("Database does not exist. Creating database...");
+                    await databaseCreator.CreateAsync();
+                }
 
-            if (!schemaExists)
-            {
-                logger.LogWarning("Partial or missing database schema detected. Dropping partial tables and recreating schema...");
-                
-                // Disable foreign key checks to avoid deletion constraint errors during cleanup
-                await context.Database.ExecuteSqlRawAsync("SET FOREIGN_KEY_CHECKS = 0;");
-                await context.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS `Messages`;");
-                await context.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS `Conversations`;");
-                await context.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS `Users`;");
-                await context.Database.ExecuteSqlRawAsync("SET FOREIGN_KEY_CHECKS = 1;");
-                
-                // Recreate database schema
-                await context.Database.EnsureCreatedAsync();
-                logger.LogInformation("Database schema recreated successfully.");
+                if (!await databaseCreator.HasTablesAsync())
+                {
+                    logger.LogWarning("Missing database schema detected. Initializing schema...");
+                    await databaseCreator.CreateTablesAsync();
+                    logger.LogInformation("Database schema created successfully.");
+                }
+                else
+                {
+                    logger.LogInformation("Database and tables verified successfully.");
+                }
             }
         }
         catch (Exception ex)
