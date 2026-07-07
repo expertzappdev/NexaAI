@@ -17,11 +17,11 @@ const ChatWindow: React.FC = () => {
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="flex-grow flex flex-col h-full overflow-hidden bg-white dark:bg-zinc-950">
+    <div className="flex-grow flex flex-col h-full overflow-hidden bg-[#050505]">
       {/* Scrollable messages or welcome grid */}
       <div className="flex-grow overflow-y-auto px-4 py-6 md:px-6">
         {hasMessages ? (
-          <div className="max-w-3xl mx-auto space-y-6 pb-6">
+          <div className="max-w-2xl mx-auto space-y-6 pb-20">
             {messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
