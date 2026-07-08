@@ -1,5 +1,6 @@
 import React from 'react';
 import { Menu, Bell, Clock } from 'lucide-react';
+import ModelSelector from './ModelSelector';
 import { useChat } from '../store/ChatContext';
 
 interface NavbarProps {
@@ -14,7 +15,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
 
   return (
     <header className="flex items-center justify-between px-6 py-4 bg-zinc-950/40 border-b border-zinc-900/60 sticky top-0 z-30 backdrop-blur-md">
-      <div className="flex items-center space-x-3 min-w-0">
+      <div className="flex items-center space-x-3.5 min-w-0">
         {/* Mobile Menu Icon */}
         <button
           onClick={onMenuClick}
@@ -23,8 +24,15 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
           <Menu className="w-5 h-5" />
         </button>
 
+        <div className="flex items-center space-x-2">
+          <span className="text-sm font-bold tracking-wide text-zinc-100 hidden sm:inline">Nexa AI</span>
+          <ModelSelector />
+        </div>
+
         {title && (
-          <span className="text-sm font-semibold text-zinc-200 truncate">{title}</span>
+          <span className="text-xs font-medium text-zinc-550 truncate border-l border-zinc-800/80 pl-3.5 max-w-[150px] sm:max-w-[300px]">
+            {title}
+          </span>
         )}
       </div>
 

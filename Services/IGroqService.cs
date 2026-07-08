@@ -1,51 +1,53 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace AIChatBot.Services
 {
-    public class OpenRouterMessage
+    public class GroqMessage
     {
         [JsonPropertyName("role")]
-        public string Role { get; set; } = string.Empty; // system, user, assistant
+        public string Role { get; set; } = string.Empty;
 
         [JsonPropertyName("content")]
         public string Content { get; set; } = string.Empty;
     }
 
-    public class OpenRouterRequest
+    public class GroqRequest
     {
         [JsonPropertyName("model")]
         public string Model { get; set; } = string.Empty;
 
         [JsonPropertyName("messages")]
-        public List<OpenRouterMessage> Messages { get; set; } = new List<OpenRouterMessage>();
+        public List<GroqMessage> Messages { get; set; } = new List<GroqMessage>();
     }
 
-    public class OpenRouterResponse
+    public class GroqResponse
     {
         [JsonPropertyName("id")]
         public string Id { get; set; } = string.Empty;
 
         [JsonPropertyName("choices")]
-        public List<OpenRouterChoice> Choices { get; set; } = new List<OpenRouterChoice>();
+        public List<GroqChoice> Choices { get; set; } = new List<GroqChoice>();
 
         [JsonPropertyName("usage")]
-        public OpenRouterUsage? Usage { get; set; }
+        public GroqUsage? Usage { get; set; }
 
         [JsonPropertyName("model")]
         public string Model { get; set; } = string.Empty;
     }
 
-    public class OpenRouterChoice
+    public class GroqChoice
     {
         [JsonPropertyName("message")]
-        public OpenRouterMessage Message { get; set; } = new OpenRouterMessage();
+        public GroqMessage Message { get; set; } = new GroqMessage();
 
         [JsonPropertyName("finish_reason")]
         public string FinishReason { get; set; } = string.Empty;
     }
 
-    public class OpenRouterUsage
+    public class GroqUsage
     {
         [JsonPropertyName("prompt_tokens")]
         public int PromptTokens { get; set; }
@@ -57,18 +59,11 @@ namespace AIChatBot.Services
         public int TotalTokens { get; set; }
     }
 
-    public class OpenRouterErrorDetails
+    public interface IGroqService
     {
-        [JsonPropertyName("message")]
-        public string Message { get; set; } = string.Empty;
-
-        [JsonPropertyName("code")]
-        public int Code { get; set; }
-    }
-
-    public class OpenRouterErrorResponse
-    {
-        [JsonPropertyName("error")]
-        public OpenRouterErrorDetails Error { get; set; } = new OpenRouterErrorDetails();
+        Task<GroqResponse> SendMessageAsync(
+            List<GroqMessage> chatHistory,
+            string? modelOverride = null,
+            CancellationToken cancellationToken = default);
     }
 }

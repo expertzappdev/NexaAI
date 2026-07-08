@@ -5,6 +5,13 @@ import type { Conversation, Message, User } from '../types';
 import apiClient from '../api/client';
 import socketService from '../services/signalrService';
 
+export interface AIModel {
+  id: string;
+  name: string;
+  provider: string;
+  description: string;
+}
+
 interface Toast {
   id: number;
   message: string;
@@ -29,6 +36,9 @@ interface ChatContextType {
   sendMessage: (text: string) => Promise<void>;
   clearMessages: () => void;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  selectedModel: string;
+  setSelectedModel: (model: string) => void;
+  availableModels: AIModel[];
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -42,6 +52,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [socketConnected, setSocketConnected] = useState<boolean>(false);
+  const [selectedModel, setSelectedModel] = useState<string>('llama-3.1-8b-instant');
+  const [availableModels, setAvailableModels] = useState<AIModel[]>([
+    {
+      id: 'llama-3.1-8b-instant',
+      name: 'Llama 3.1 Instant',
+      provider: 'Groq',
+      description: 'Fast lightweight assistant',
+    },
+  ]);
 
   // Store activeConversationId in a ref to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
@@ -116,6 +135,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [token]);
 
+  // Load available models on token initialization
+  useEffect(() => {
+    if (token) {
+      apiClient.get<AIModel[]>('/models')
+        .then((res) => {
+          if (res.data && res.data.length > 0) {
+            setAvailableModels(res.data);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to fetch models from server', err);
+        });
+    }
+  }, [token]);
+
   // Load initial configurations (token, user)
   useEffect(() => {
     // Keep dark mode permanently
@@ -182,8 +216,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActiveConversationId(id);
     setIsLoading(true);
     try {
-      const response = await apiClient.get<{ messages: Message[] }>(`/conversations/${id}`);
+      const response = await apiClient.get<any>(`/conversations/${id}`);
       setMessages(response.data.messages || []);
+      if (response.data.selectedModel) {
+        setSelectedModel(response.data.selectedModel);
+      }
     } catch (error) {
       console.error('Failed to fetch conversation details', error);
       showToast('Could not load chat messages', 'error');
@@ -253,7 +290,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      await socketService.sendMessage(targetConvId, text);
+      await socketService.sendMessage(targetConvId, text, selectedModel);
     } catch (error) {
       console.error('Failed to send message via SignalR', error);
       showToast('Failed to send message. Connecting...', 'error');
@@ -285,6 +322,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sendMessage,
         clearMessages,
         showToast,
+        selectedModel,
+        setSelectedModel,
+        availableModels,
       }}
     >
       {children}

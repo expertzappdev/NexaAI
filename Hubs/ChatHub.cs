@@ -27,7 +27,7 @@ namespace AIChatBot.Hubs
             return userId;
         }
 
-        public async Task SendMessage(int conversationId, string message)
+        public async Task SendMessage(int conversationId, string message, string model)
         {
             try
             {
@@ -50,11 +50,12 @@ namespace AIChatBot.Hubs
                 // Notify client that typing/processing has started
                 await Clients.Caller.SendAsync("TypingStarted");
 
-                // Process conversation and call OpenRouter
+                // Process conversation and call Groq
                 var chatResponse = await _conversationService.ProcessSendMessageAsync(
                     userId,
                     conversationId,
                     message,
+                    model,
                     Context.ConnectionAborted);
 
                 // Send assistant response back to client

@@ -15,18 +15,18 @@ namespace AIChatBot.Services
     {
         private readonly IRepository<Conversation> _conversationRepository;
         private readonly IRepository<Message> _messageRepository;
-        private readonly IOpenRouterService _openRouterService;
+        private readonly IGroqService _groqService;
         private readonly ILogger<ConversationService> _logger;
 
         public ConversationService(
             IRepository<Conversation> conversationRepository,
             IRepository<Message> messageRepository,
-            IOpenRouterService openRouterService,
+            IGroqService groqService,
             ILogger<ConversationService> logger)
         {
             _conversationRepository = conversationRepository;
             _messageRepository = messageRepository;
-            _openRouterService = openRouterService;
+            _groqService = groqService;
             _logger = logger;
         }
 
@@ -53,6 +53,7 @@ namespace AIChatBot.Services
                 Id = conversation.Id,
                 UserId = conversation.UserId,
                 Title = conversation.Title,
+                SelectedModel = conversation.SelectedModel,
                 CreatedAt = conversation.CreatedAt,
                 UpdatedAt = conversation.UpdatedAt
             };
@@ -71,6 +72,7 @@ namespace AIChatBot.Services
                     Id = c.Id,
                     UserId = c.UserId,
                     Title = c.Title,
+                    SelectedModel = c.SelectedModel,
                     CreatedAt = c.CreatedAt,
                     UpdatedAt = c.UpdatedAt
                 })
@@ -118,6 +120,7 @@ namespace AIChatBot.Services
             {
                 Id = conversation.Id,
                 Title = conversation.Title,
+                SelectedModel = conversation.SelectedModel,
                 CreatedAt = conversation.CreatedAt,
                 UpdatedAt = conversation.UpdatedAt,
                 Messages = messages
@@ -172,6 +175,7 @@ namespace AIChatBot.Services
             int userId, 
             int conversationId, 
             string content, 
+            string model,
             CancellationToken cancellationToken = default)
         {
             // 1. Verify Ownership & Load Conversation
@@ -189,24 +193,30 @@ namespace AIChatBot.Services
                 throw new UnauthorizedAccessException("You are not authorized to send messages in this conversation.");
             }
 
-            // 2. Build OpenRouter Chat History
-            var chatHistory = new List<OpenRouterMessage>();
+            // Save selected model on conversation
+            if (!string.IsNullOrWhiteSpace(model))
+            {
+                conversation.SelectedModel = model;
+            }
+
+            // 2. Build Groq Chat History
+            var chatHistory = new List<GroqMessage>();
             
             // Add system prompt if history is empty (or as first message)
             bool hasSystemMessage = conversation.Messages.Any(m => m.Role.Equals("system", StringComparison.OrdinalIgnoreCase));
             if (!hasSystemMessage)
             {
-                chatHistory.Add(new OpenRouterMessage
+                chatHistory.Add(new GroqMessage
                 {
                     Role = "system",
-                    Content = "You are a helpful AI assistant."
+                    Content = "You are Nexa AI assistant"
                 });
             }
 
             // Map all existing messages ordered by creation
             foreach (var dbMsg in conversation.Messages.OrderBy(m => m.CreatedAt))
             {
-                chatHistory.Add(new OpenRouterMessage
+                chatHistory.Add(new GroqMessage
                 {
                     Role = dbMsg.Role,
                     Content = dbMsg.Content
@@ -214,21 +224,21 @@ namespace AIChatBot.Services
             }
 
             // Append the new User message
-            chatHistory.Add(new OpenRouterMessage
+            chatHistory.Add(new GroqMessage
             {
                 Role = "user",
                 Content = content
             });
 
-            // 3. Call OpenRouter Service
-            var openRouterResponse = await _openRouterService.SendMessageAsync(chatHistory, null, cancellationToken);
+            // 3. Call Groq Service
+            var groqResponse = await _groqService.SendMessageAsync(chatHistory, conversation.SelectedModel, cancellationToken);
 
             // 4. Extract Response Content and Token Info
-            var assistantContent = openRouterResponse.Choices[0].Message.Content;
-            var promptTokens = openRouterResponse.Usage?.PromptTokens;
-            var completionTokens = openRouterResponse.Usage?.CompletionTokens;
-            var totalTokens = openRouterResponse.Usage?.TotalTokens;
-            var modelUsed = openRouterResponse.Model;
+            var assistantContent = groqResponse.Choices[0].Message.Content;
+            var promptTokens = groqResponse.Usage?.PromptTokens;
+            var completionTokens = groqResponse.Usage?.CompletionTokens;
+            var totalTokens = groqResponse.Usage?.TotalTokens;
+            var modelUsed = groqResponse.Model;
 
             // 5. Save Messages in Db
             var userMessage = new Message
