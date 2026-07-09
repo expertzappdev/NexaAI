@@ -17,7 +17,7 @@ namespace AIChatBot.Configurations
             set => _apiKey = value;
         }
 
-        public string BaseUrl { get; set; } = "https://api.groq.com/openai/v1";
+        public string BaseUrl { get; set; } = "https://api.groq.com/openai/v1/";
         public string DefaultModel { get; set; } = "llama-3.1-8b-instant";
     }
 }
