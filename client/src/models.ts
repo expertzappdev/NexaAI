@@ -54,13 +54,4 @@ export const AI_MODELS: AIModel[] = [
     description: 'Fast agent model with tool reasoning ability.',
     icon: '🤖',
   },
-  {
-    id: 'groq/compound',
-    name: 'Compound',
-    category: 'Agent Pro',
-    latency: '1675 ms',
-    tokens: '465 tokens/sec',
-    description: 'Advanced agent model for complex workflows and automation.',
-    icon: '🤖',
-  },
 ];

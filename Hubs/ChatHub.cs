@@ -49,8 +49,7 @@ namespace AIChatBot.Hubs
                     "llama-3.3-70b-versatile",
                     "qwen/qwen3.6-27b",
                     "qwen/qwen3-32b",
-                    "groq/compound-mini",
-                    "groq/compound"
+                    "groq/compound-mini"
                 };
 
                 if (!allowedModels.Contains(model))

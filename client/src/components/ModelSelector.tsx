@@ -33,8 +33,6 @@ const ModelSelector: React.FC = () => {
         return '🧠 Qwen Think';
       case 'groq/compound-mini':
         return '🤖 Compound Mini';
-      case 'groq/compound':
-        return '🤖 Compound Pro';
       default:
         return `${model.icon || '🤖'} ${model.name}`;
     }
