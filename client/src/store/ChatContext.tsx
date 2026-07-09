@@ -4,13 +4,8 @@ import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
 import type { Conversation, Message, User } from '../types';
 import apiClient from '../api/client';
 import socketService from '../services/signalrService';
-
-export interface AIModel {
-  id: string;
-  name: string;
-  provider: string;
-  description: string;
-}
+import { AI_MODELS } from '../models';
+import type { AIModel } from '../models';
 
 interface Toast {
   id: number;
@@ -53,14 +48,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [socketConnected, setSocketConnected] = useState<boolean>(false);
   const [selectedModel, setSelectedModel] = useState<string>('llama-3.1-8b-instant');
-  const [availableModels, setAvailableModels] = useState<AIModel[]>([
-    {
-      id: 'llama-3.1-8b-instant',
-      name: 'Llama 3.1 Instant',
-      provider: 'Groq',
-      description: 'Fast lightweight assistant',
-    },
-  ]);
+  const [availableModels, setAvailableModels] = useState<AIModel[]>(AI_MODELS);
 
   // Store activeConversationId in a ref to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
@@ -138,10 +126,22 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Load available models on token initialization
   useEffect(() => {
     if (token) {
-      apiClient.get<AIModel[]>('/models')
+      apiClient.get<any[]>('/models')
         .then((res) => {
           if (res.data && res.data.length > 0) {
-            setAvailableModels(res.data);
+            const mapped = res.data.map(serverModel => {
+              const local = AI_MODELS.find(m => m.id === serverModel.id || m.id === serverModel.Id);
+              return {
+                id: serverModel.id || serverModel.Id || '',
+                name: serverModel.name || serverModel.Name || '',
+                category: local?.category || 'Fast',
+                latency: local?.latency || '',
+                tokens: local?.tokens || '',
+                description: serverModel.description || serverModel.Description || local?.description || '',
+                icon: local?.icon || '⚡'
+              };
+            });
+            setAvailableModels(mapped);
           }
         })
         .catch((err) => {

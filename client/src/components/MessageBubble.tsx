@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Copy, Check } from 'lucide-react';
+import { User, Copy, Check, Brain, ChevronDown, ChevronUp } from 'lucide-react';
 import type { Message } from '../types';
 import MarkdownRenderer from './MarkdownRenderer';
 
@@ -11,6 +11,7 @@ interface MessageBubbleProps {
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
+  const [showThinking, setShowThinking] = useState(false);
 
   const handleCopy = async () => {
     try {
@@ -29,6 +30,30 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       return '';
     }
   };
+
+  const parseMessageContent = (content: string) => {
+    // 1. Try to find a closed think tag
+    const thinkRegex = /<(think|thought)>([\s\S]*?)<\/\1>/gi;
+    const match = thinkRegex.exec(content);
+    
+    if (match) {
+      const thinking = match[2].trim();
+      const cleanContent = content.replace(thinkRegex, '').trim();
+      return { thinking, cleanContent, isThinkingComplete: true };
+    }
+    
+    // 2. Try to find an unclosed think tag (useful for streaming/incomplete messages)
+    const unclosedRegex = /<(think|thought)>([\s\S]*)/i;
+    const unclosedMatch = unclosedRegex.exec(content);
+    if (unclosedMatch) {
+      const thinking = unclosedMatch[2].trim();
+      return { thinking, cleanContent: '', isThinkingComplete: false };
+    }
+    
+    return { thinking: null, cleanContent: content, isThinkingComplete: true };
+  };
+
+  const { thinking, cleanContent, isThinkingComplete } = parseMessageContent(message.content);
 
   return (
     <motion.div
@@ -69,11 +94,36 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
 
+          {/* Thinking Block Section */}
+          {!isUser && thinking && (
+            <div className="mb-3.5 border-b border-zinc-800/80 pb-3">
+              <button
+                onClick={() => setShowThinking(!showThinking)}
+                className="flex items-center gap-2 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors focus:outline-none"
+              >
+                <Brain className="w-3.5 h-3.5 text-purple-400" />
+                <span>{showThinking ? 'Hide Thought Process' : 'Show Thought Process'}</span>
+                {!isThinkingComplete && (
+                  <span className="text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/25 px-1.5 py-0.2 rounded animate-pulse">
+                    Thinking...
+                  </span>
+                )}
+                {showThinking ? <ChevronUp className="w-3 h-3 text-zinc-500" /> : <ChevronDown className="w-3 h-3 text-zinc-500" />}
+              </button>
+              
+              {showThinking && (
+                <div className="mt-2.5 pl-3 border-l border-zinc-700 text-zinc-400 text-xs leading-relaxed whitespace-pre-wrap font-normal italic select-text">
+                  {thinking}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Text Content */}
           {isUser ? (
             <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
           ) : (
-            <MarkdownRenderer content={message.content} />
+            cleanContent && <MarkdownRenderer content={cleanContent} />
           )}
 
           {/* Bubble Footer (Time and Analytics) */}
