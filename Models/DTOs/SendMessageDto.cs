@@ -1,15 +1,14 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace AIChatBot.Models.Requests
+namespace AIChatBot.Models.DTOs
 {
-    public class SendMessageRequest
+    public class SendMessageDto
     {
         [Required]
         public int ConversationId { get; set; }
 
         [Required]
         [MinLength(1, ErrorMessage = "Message content cannot be empty.")]
-        [MaxLength(4000, ErrorMessage = "Message content is too long. Maximum is 4000 characters.")]
         public string Message { get; set; } = string.Empty;
 
         public string Model { get; set; } = "llama-3.1-8b-instant";

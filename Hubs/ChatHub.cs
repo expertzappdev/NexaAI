@@ -37,6 +37,28 @@ namespace AIChatBot.Hubs
                     return;
                 }
 
+                // Model Validation
+                if (string.IsNullOrWhiteSpace(model))
+                {
+                    model = "llama-3.1-8b-instant";
+                }
+
+                var allowedModels = new System.Collections.Generic.HashSet<string>
+                {
+                    "llama-3.1-8b-instant",
+                    "llama-3.3-70b-versatile",
+                    "qwen/qwen3.6-27b",
+                    "qwen/qwen3-32b",
+                    "groq/compound-mini",
+                    "groq/compound"
+                };
+
+                if (!allowedModels.Contains(model))
+                {
+                    await Clients.Caller.SendAsync("ErrorMessage", "Invalid model selected.");
+                    return;
+                }
+
                 var userId = GetCurrentUserId();
 
                 // Echo the user's message back to their client to confirm it was received and saved.

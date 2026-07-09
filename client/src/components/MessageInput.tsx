@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ArrowUp, Paperclip } from 'lucide-react';
 import { useChat } from '../store/ChatContext';
+import ModelSelector from './ModelSelector';
 
 const MessageInput: React.FC = () => {
   const { sendMessage, isLoading } = useChat();
@@ -38,6 +39,11 @@ const MessageInput: React.FC = () => {
 
   return (
     <div className="bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent px-4 pb-6 pt-2">
+      {/* Mobile Model Selector (visible only on screens smaller than sm) */}
+      <div className="max-w-2xl mx-auto mb-2 flex justify-start sm:hidden">
+        <ModelSelector />
+      </div>
+
       <div className="max-w-2xl mx-auto relative flex items-end border border-zinc-800 bg-zinc-900/60 backdrop-blur-md rounded-3xl shadow-2xl focus-within:ring-1 focus-within:ring-purple-500/40 focus-within:border-purple-500/40 transition-all p-2 pr-3 pl-3.5">
         
         {/* Attachment icon placeholder */}
@@ -59,6 +65,11 @@ const MessageInput: React.FC = () => {
           disabled={isLoading}
           className="flex-grow resize-none border-0 bg-transparent text-sm text-zinc-150 placeholder-zinc-550 focus:ring-0 focus:outline-none px-3.5 py-2.5 max-h-[180px] min-h-[44px] overflow-y-auto leading-relaxed"
         />
+
+        {/* Desktop Model Selector (visible on sm and larger screens) */}
+        <div className="hidden sm:flex items-center mr-2 mb-0.5">
+          <ModelSelector />
+        </div>
 
         {/* Circular Send Button with gradient */}
         <button
