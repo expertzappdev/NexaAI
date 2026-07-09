@@ -36,6 +36,7 @@ namespace AIChatBot.Data
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP(6)");
                 entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP(6)")
                     .ValueGeneratedOnAddOrUpdate(); // Let MySQL handle updatedAt if needed, or update via app logic
+                entity.Property(e => e.SelectedModel).HasMaxLength(150).HasDefaultValue("llama-3.1-8b-instant");
 
                 // Relationship: User (1) -> Conversations (Many)
                 entity.HasOne(c => c.User)

@@ -100,11 +100,11 @@ class SignalrService {
     }
   }
 
-  public async sendMessage(conversationId: number, message: string): Promise<void> {
+  public async sendMessage(conversationId: number, message: string, model: string): Promise<void> {
     if (!this.connection || this.connection.state !== HubConnectionState.Connected) {
       throw new Error('Cannot send message. SignalR is not connected.');
     }
-    await this.connection.invoke('SendMessage', conversationId, message);
+    await this.connection.invoke('SendMessage', conversationId, message, model);
   }
 
   public isConnected(): boolean {

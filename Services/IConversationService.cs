@@ -36,6 +36,7 @@ namespace AIChatBot.Services
             int userId, 
             int conversationId, 
             string content, 
+            string model,
             CancellationToken cancellationToken = default);
     }
 }
