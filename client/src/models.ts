@@ -54,4 +54,13 @@ export const AI_MODELS: AIModel[] = [
     description: 'Fast agent model with tool reasoning ability.',
     icon: '🤖',
   },
+  {
+    id: 'nexa-web-search',
+    name: 'Nexa Web Search',
+    category: 'Search',
+    latency: 'Variable',
+    tokens: 'Groq + Tavily',
+    description: 'AI assistant powered with real-time web knowledge',
+    icon: '🌐',
+  },
 ];

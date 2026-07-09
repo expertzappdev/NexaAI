@@ -17,6 +17,13 @@ const MessageInput: React.FC = () => {
     textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
   }, [text]);
 
+  // Keep focus on the textarea when loading finishes
+  useEffect(() => {
+    if (!isLoading && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [isLoading]);
+
   const handleSend = async () => {
     if (!text.trim() || isLoading) return;
     const currentText = text;
@@ -28,6 +35,11 @@ const MessageInput: React.FC = () => {
     }
 
     await sendMessage(currentText);
+    
+    // Force focus back immediately after sending
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 50);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -62,7 +74,6 @@ const MessageInput: React.FC = () => {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Message Nexa AI..."
-          disabled={isLoading}
           className="flex-grow resize-none border-0 bg-transparent text-sm text-zinc-150 placeholder-zinc-550 focus:ring-0 focus:outline-none px-3.5 py-2.5 max-h-[180px] min-h-[44px] overflow-y-auto leading-relaxed"
         />
 

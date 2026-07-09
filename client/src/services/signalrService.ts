@@ -9,11 +9,12 @@ class SignalrService {
 
   public async connect(
     token: string,
-    onReceiveMessage: (payload: { role: string; content: string; createdAt: string }) => void,
+    onReceiveMessage: (payload: { role: string; content: string; createdAt: string; model?: string; totalTokens?: number }) => void,
     onTypingStarted: () => void,
     onTypingStopped: () => void,
     onErrorMessage: (error: string) => void,
-    onConnectionChange: (connected: boolean) => void
+    onConnectionChange: (connected: boolean) => void,
+    onSearchStatus?: (status: string) => void
   ): Promise<void> {
     if (this.connection) {
       if (this.connection.state === HubConnectionState.Connected) {
@@ -57,6 +58,12 @@ class SignalrService {
 
     this.connection.on('ErrorMessage', (errorMsg) => {
       onErrorMessage(errorMsg);
+    });
+
+    this.connection.on('SearchStatus', (status) => {
+      if (onSearchStatus) {
+        onSearchStatus(status);
+      }
     });
 
     this.connection.onreconnecting((error) => {

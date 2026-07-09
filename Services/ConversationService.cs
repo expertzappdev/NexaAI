@@ -16,17 +16,23 @@ namespace AIChatBot.Services
         private readonly IRepository<Conversation> _conversationRepository;
         private readonly IRepository<Message> _messageRepository;
         private readonly IGroqService _groqService;
+        private readonly ITavilyService _tavilyService;
+        private readonly IWebSearchDecisionService _webSearchDecisionService;
         private readonly ILogger<ConversationService> _logger;
 
         public ConversationService(
             IRepository<Conversation> conversationRepository,
             IRepository<Message> messageRepository,
             IGroqService groqService,
+            ITavilyService tavilyService,
+            IWebSearchDecisionService webSearchDecisionService,
             ILogger<ConversationService> logger)
         {
             _conversationRepository = conversationRepository;
             _messageRepository = messageRepository;
             _groqService = groqService;
+            _tavilyService = tavilyService;
+            _webSearchDecisionService = webSearchDecisionService;
             _logger = logger;
         }
 
@@ -176,6 +182,7 @@ namespace AIChatBot.Services
             int conversationId, 
             string content, 
             string model,
+            Func<string, Task>? onStatusUpdate = null,
             CancellationToken cancellationToken = default)
         {
             // 1. Verify Ownership & Load Conversation
@@ -199,7 +206,39 @@ namespace AIChatBot.Services
                 conversation.SelectedModel = model;
             }
 
-            // 2. Build Groq Chat History
+            // 2. Decide if web search is needed
+            bool requiresSearch = false;
+            string searchReason = "";
+            string finalModel = model;
+
+            if (model == "nexa-web-search")
+            {
+                requiresSearch = true;
+                searchReason = "Nexa Web Search model is selected.";
+                finalModel = "llama-3.3-70b-versatile"; // Default fallback model for Nexa Search
+            }
+            else
+            {
+                if (onStatusUpdate != null)
+                {
+                    await onStatusUpdate("Analyzing query...");
+                }
+                var decision = await _webSearchDecisionService.DecideAsync(content, cancellationToken);
+                requiresSearch = decision.RequiresSearch;
+                searchReason = decision.Reason;
+            }
+
+            string searchResults = "";
+            if (requiresSearch)
+            {
+                if (onStatusUpdate != null)
+                {
+                    await onStatusUpdate("Searching the web...");
+                }
+                searchResults = await _tavilyService.SearchAsync(content, cancellationToken);
+            }
+
+            // 3. Build Groq Chat History
             var chatHistory = new List<GroqMessage>();
             
             // Add system prompt if history is empty (or as first message)
@@ -223,6 +262,16 @@ namespace AIChatBot.Services
                 });
             }
 
+            // Append retrieved web search info if needed
+            if (requiresSearch && !string.IsNullOrWhiteSpace(searchResults))
+            {
+                chatHistory.Add(new GroqMessage
+                {
+                    Role = "system",
+                    Content = $"The following web search information was retrieved for the query:\n{searchResults}\nAnswer the user using this updated information."
+                });
+            }
+
             // Append the new User message
             chatHistory.Add(new GroqMessage
             {
@@ -230,17 +279,23 @@ namespace AIChatBot.Services
                 Content = content
             });
 
-            // 3. Call Groq Service
-            var groqResponse = await _groqService.SendMessageAsync(chatHistory, conversation.SelectedModel, cancellationToken);
+            // 4. Call Groq Service
+            var groqResponse = await _groqService.SendMessageAsync(chatHistory, finalModel, cancellationToken);
 
-            // 4. Extract Response Content and Token Info
+            // 5. Extract Response Content and Token Info
             var assistantContent = groqResponse.Choices[0].Message.Content;
             var promptTokens = groqResponse.Usage?.PromptTokens;
             var completionTokens = groqResponse.Usage?.CompletionTokens;
             var totalTokens = groqResponse.Usage?.TotalTokens;
+            
             var modelUsed = groqResponse.Model;
+            if (requiresSearch)
+            {
+                // Indicate search usage in the persisted model name
+                modelUsed += " + Search";
+            }
 
-            // 5. Save Messages in Db
+            // 6. Save Messages in Db
             var userMessage = new Message
             {
                 ConversationId = conversationId,
