@@ -60,6 +60,60 @@ namespace AIChatBot.Controllers
             return Ok(list);
         }
 
+        [HttpGet("archived")]
+        public async Task<IActionResult> GetArchived(CancellationToken cancellationToken)
+        {
+            var userId = GetCurrentUserId();
+            var list = await _conversationService.GetArchivedConversationsForUserAsync(userId, cancellationToken);
+            return Ok(list);
+        }
+
+        [HttpPut("{conversationId:int}/archive")]
+        public async Task<IActionResult> Archive(int conversationId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+                var success = await _conversationService.ArchiveConversationAsync(userId, conversationId, cancellationToken);
+                if (!success)
+                {
+                    return BadRequest(new { Success = false, ErrorMessage = "Failed to archive conversation." });
+                }
+                return Ok(new { Success = true });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Success = false, ErrorMessage = ex.Message });
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+        [HttpPut("{conversationId:int}/restore")]
+        public async Task<IActionResult> Restore(int conversationId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+                var success = await _conversationService.RestoreConversationAsync(userId, conversationId, cancellationToken);
+                if (!success)
+                {
+                    return BadRequest(new { Success = false, ErrorMessage = "Failed to restore conversation." });
+                }
+                return Ok(new { Success = true });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Success = false, ErrorMessage = ex.Message });
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
         [HttpGet("{conversationId:int}")]
         public async Task<IActionResult> GetById(int conversationId, CancellationToken cancellationToken)
         {

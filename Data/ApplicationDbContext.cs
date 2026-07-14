@@ -39,6 +39,8 @@ namespace AIChatBot.Data
                 entity.Property(e => e.SelectedModel).HasMaxLength(150).HasDefaultValue("llama-3.1-8b-instant");
                 entity.Property(e => e.IsPinned).HasDefaultValue(false);
                 entity.Property(e => e.PinnedAt).IsRequired(false);
+                entity.Property(e => e.IsArchived).HasDefaultValue(false);
+                entity.Property(e => e.ArchivedAt).IsRequired(false);
 
                 // Relationship: User (1) -> Conversations (Many)
                 entity.HasOne(c => c.User)

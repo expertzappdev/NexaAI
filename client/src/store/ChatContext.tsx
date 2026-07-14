@@ -38,6 +38,10 @@ interface ChatContextType {
   searchStatus: string | null;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
+  archivedConversations: Conversation[];
+  loadArchivedConversations: () => Promise<void>;
+  archiveConversation: (id: number) => Promise<boolean>;
+  restoreConversation: (id: number) => Promise<boolean>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -55,6 +59,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [availableModels, setAvailableModels] = useState<AIModel[]>(AI_MODELS);
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
 
   // Store activeConversationId in a ref to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
@@ -235,9 +240,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(null);
     setUser(null);
     setConversations([]);
+    setArchivedConversations([]);
     setActiveConversationId(null);
     setMessages([]);
     showToast('Signed out successfully', 'info');
+  };
+
+  const loadArchivedConversations = async () => {
+    if (!token) return;
+    try {
+      const response = await apiClient.get<Conversation[]>('/conversations/archived');
+      setArchivedConversations(response.data.sort((a, b) => new Date(b.archivedAt || b.createdAt).getTime() - new Date(a.archivedAt || a.createdAt).getTime()));
+    } catch (error) {
+      console.error('Failed to load archived conversations', error);
+    }
   };
 
   const loadConversations = async () => {
@@ -245,9 +261,62 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const response = await apiClient.get<Conversation[]>('/conversations');
       setConversations(sortConversationsList(response.data));
+      await loadArchivedConversations();
     } catch (error) {
       console.error('Failed to load conversations', error);
       showToast('Failed to load conversations from server', 'error');
+    }
+  };
+
+  const archiveConversation = async (id: number): Promise<boolean> => {
+    try {
+      await apiClient.put(`/conversations/${id}/archive`);
+      const conversationToArchive = conversations.find((c) => c.id === id);
+      if (conversationToArchive) {
+        const updatedConv: Conversation = {
+          ...conversationToArchive,
+          isArchived: true,
+          archivedAt: new Date().toISOString(),
+          isPinned: false,
+          pinnedAt: undefined,
+        };
+        setConversations((prev) => prev.filter((c) => c.id !== id));
+        setArchivedConversations((prev) => 
+          [updatedConv, ...prev].sort((a, b) => new Date(b.archivedAt || b.createdAt).getTime() - new Date(a.archivedAt || a.createdAt).getTime())
+        );
+      }
+      if (activeConversationId === id) {
+        setActiveConversationId(null);
+        setMessages([]);
+      }
+      showToast('Conversation archived', 'success');
+      return true;
+    } catch (error) {
+      console.error('Failed to archive conversation', error);
+      showToast('Could not archive conversation', 'error');
+      return false;
+    }
+  };
+
+  const restoreConversation = async (id: number): Promise<boolean> => {
+    try {
+      await apiClient.put(`/conversations/${id}/restore`);
+      const conversationToRestore = archivedConversations.find((c) => c.id === id);
+      if (conversationToRestore) {
+        const updatedConv: Conversation = {
+          ...conversationToRestore,
+          isArchived: false,
+          archivedAt: undefined,
+        };
+        setArchivedConversations((prev) => prev.filter((c) => c.id !== id));
+        setConversations((prev) => sortConversationsList([updatedConv, ...prev]));
+      }
+      showToast('Conversation restored', 'success');
+      return true;
+    } catch (error) {
+      console.error('Failed to restore conversation', error);
+      showToast('Could not restore conversation', 'error');
+      return false;
     }
   };
 
@@ -303,6 +372,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await apiClient.delete(`/conversations/${id}`);
       setConversations((prev) => prev.filter((c) => c.id !== id));
+      setArchivedConversations((prev) => prev.filter((c) => c.id !== id));
       if (activeConversationId === id) {
         setActiveConversationId(null);
         setMessages([]);
@@ -401,6 +471,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         searchStatus,
         searchQuery,
         setSearchQuery,
+        archivedConversations,
+        loadArchivedConversations,
+        archiveConversation,
+        restoreConversation,
       }}
     >
       {children}

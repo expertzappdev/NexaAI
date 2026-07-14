@@ -60,6 +60,10 @@ namespace AIChatBot.Services
                 UserId = conversation.UserId,
                 Title = conversation.Title,
                 SelectedModel = conversation.SelectedModel,
+                IsPinned = conversation.IsPinned,
+                PinnedAt = conversation.PinnedAt,
+                IsArchived = conversation.IsArchived,
+                ArchivedAt = conversation.ArchivedAt,
                 CreatedAt = conversation.CreatedAt,
                 UpdatedAt = conversation.UpdatedAt
             };
@@ -71,7 +75,7 @@ namespace AIChatBot.Services
         {
             var list = await _conversationRepository.GetQueryable()
                 .AsNoTracking()
-                .Where(c => c.UserId == userId)
+                .Where(c => c.UserId == userId && !c.IsArchived)
                 .OrderByDescending(c => c.IsPinned)
                 .ThenByDescending(c => c.PinnedAt)
                 .ThenByDescending(c => c.CreatedAt)
@@ -83,6 +87,8 @@ namespace AIChatBot.Services
                     SelectedModel = c.SelectedModel,
                     IsPinned = c.IsPinned,
                     PinnedAt = c.PinnedAt,
+                    IsArchived = c.IsArchived,
+                    ArchivedAt = c.ArchivedAt,
                     CreatedAt = c.CreatedAt,
                     UpdatedAt = c.UpdatedAt
                 })
@@ -133,6 +139,8 @@ namespace AIChatBot.Services
                 SelectedModel = conversation.SelectedModel,
                 IsPinned = conversation.IsPinned,
                 PinnedAt = conversation.PinnedAt,
+                IsArchived = conversation.IsArchived,
+                ArchivedAt = conversation.ArchivedAt,
                 CreatedAt = conversation.CreatedAt,
                 UpdatedAt = conversation.UpdatedAt,
                 Messages = messages
@@ -237,7 +245,7 @@ namespace AIChatBot.Services
 
             var list = await _conversationRepository.GetQueryable()
                 .AsNoTracking()
-                .Where(c => c.UserId == userId && 
+                .Where(c => c.UserId == userId && !c.IsArchived && 
                     (EF.Functions.Like(c.Title, $"%{cleanQuery}%") || 
                      c.Messages.Any(m => EF.Functions.Like(m.Content, $"%{cleanQuery}%"))))
                 .OrderByDescending(c => c.IsPinned)
@@ -251,12 +259,89 @@ namespace AIChatBot.Services
                     SelectedModel = c.SelectedModel,
                     IsPinned = c.IsPinned,
                     PinnedAt = c.PinnedAt,
+                    IsArchived = c.IsArchived,
+                    ArchivedAt = c.ArchivedAt,
                     CreatedAt = c.CreatedAt,
                     UpdatedAt = c.UpdatedAt
                 })
                 .ToListAsync(cancellationToken);
 
             return list;
+        }
+
+        public async Task<IEnumerable<ConversationResponse>> GetArchivedConversationsForUserAsync(
+            int userId, 
+            CancellationToken cancellationToken = default)
+        {
+            var list = await _conversationRepository.GetQueryable()
+                .AsNoTracking()
+                .Where(c => c.UserId == userId && c.IsArchived)
+                .OrderByDescending(c => c.ArchivedAt)
+                .ThenByDescending(c => c.CreatedAt)
+                .Select(c => new ConversationResponse
+                {
+                    Id = c.Id,
+                    UserId = c.UserId,
+                    Title = c.Title,
+                    SelectedModel = c.SelectedModel,
+                    IsPinned = c.IsPinned,
+                    PinnedAt = c.PinnedAt,
+                    IsArchived = c.IsArchived,
+                    ArchivedAt = c.ArchivedAt,
+                    CreatedAt = c.CreatedAt,
+                    UpdatedAt = c.UpdatedAt
+                })
+                .ToListAsync(cancellationToken);
+
+            return list;
+        }
+
+        public async Task<bool> ArchiveConversationAsync(
+            int userId, 
+            int conversationId, 
+            CancellationToken cancellationToken = default)
+        {
+            var conversation = await _conversationRepository.GetByIdAsync(conversationId, cancellationToken);
+            if (conversation == null)
+            {
+                throw new KeyNotFoundException($"Conversation with ID {conversationId} was not found.");
+            }
+
+            if (conversation.UserId != userId)
+            {
+                throw new UnauthorizedAccessException("You are not authorized to modify this conversation.");
+            }
+
+            conversation.IsArchived = true;
+            conversation.ArchivedAt = DateTime.UtcNow;
+            conversation.IsPinned = false;
+            conversation.PinnedAt = null;
+
+            _conversationRepository.Update(conversation);
+            return await _conversationRepository.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task<bool> RestoreConversationAsync(
+            int userId, 
+            int conversationId, 
+            CancellationToken cancellationToken = default)
+        {
+            var conversation = await _conversationRepository.GetByIdAsync(conversationId, cancellationToken);
+            if (conversation == null)
+            {
+                throw new KeyNotFoundException($"Conversation with ID {conversationId} was not found.");
+            }
+
+            if (conversation.UserId != userId)
+            {
+                throw new UnauthorizedAccessException("You are not authorized to modify this conversation.");
+            }
+
+            conversation.IsArchived = false;
+            conversation.ArchivedAt = null;
+
+            _conversationRepository.Update(conversation);
+            return await _conversationRepository.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<ChatResponse> ProcessSendMessageAsync(

@@ -12,6 +12,8 @@ export interface Conversation {
   selectedModel?: string;
   isPinned: boolean;
   pinnedAt?: string;
+  isArchived: boolean;
+  archivedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

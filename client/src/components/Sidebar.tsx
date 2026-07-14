@@ -1,5 +1,5 @@
-import React from 'react';
-import { LogOut, Plus, X, Pin, Search } from 'lucide-react';
+import React, { useState } from 'react';
+import { LogOut, Plus, X, Pin, Search, Archive, ChevronDown, ChevronRight } from 'lucide-react';
 import { useChat } from '../store/ChatContext';
 import ConversationItem from './ConversationItem';
 
@@ -9,7 +9,8 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  const { conversations, createConversation, user, logout, searchQuery, setSearchQuery } = useChat();
+  const { conversations, createConversation, user, logout, searchQuery, setSearchQuery, archivedConversations } = useChat();
+  const [archivedExpanded, setArchivedExpanded] = useState(false);
 
   const handleNewChat = async () => {
     await createConversation("New Chat");
@@ -123,6 +124,34 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   ) : null}
                 </div>
               </div>
+
+              {/* Archived Section */}
+              {archivedConversations.length > 0 && (
+                <div className="border-t border-zinc-900/50 pt-3">
+                  <button
+                    onClick={() => setArchivedExpanded(!archivedExpanded)}
+                    className="w-full px-3 py-1.5 text-[10px] font-bold text-zinc-500 hover:text-zinc-300 uppercase tracking-widest flex items-center justify-between transition-colors focus:outline-none"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Archive className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>Archived ({archivedConversations.length})</span>
+                    </div>
+                    {archivedExpanded ? (
+                      <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 text-zinc-500" />
+                    )}
+                  </button>
+
+                  {archivedExpanded && (
+                    <div className="space-y-1 mt-2">
+                      {archivedConversations.map((conv) => (
+                        <ConversationItem key={conv.id} conversation={conv} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
