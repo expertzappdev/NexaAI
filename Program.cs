@@ -69,6 +69,7 @@ builder.Services.AddHttpClient("TavilyClient", (sp, client) =>
 });
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<IConversationService, ConversationService>();
+builder.Services.AddScoped<IMessageService, MessageService>();
 builder.Services.AddScoped<IGroqService, GroqService>();
 builder.Services.AddScoped<ITavilyService, TavilyService>();
 builder.Services.AddScoped<IWebSearchDecisionService, WebSearchDecisionService>();

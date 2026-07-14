@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
-import type { Conversation, Message, User } from '../types';
+import type { Conversation, Message, User, SavedMessage } from '../types';
 import apiClient from '../api/client';
 import socketService from '../services/signalrService';
 import { AI_MODELS } from '../models';
@@ -410,6 +410,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setConversations([]);
     setArchivedConversations([]);
+    setSavedMessages([]);
     setActiveConversationId(null);
     setMessages([]);
     showToast('Signed out successfully', 'info');
@@ -431,6 +432,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await apiClient.get<Conversation[]>('/conversations');
       setConversations(sortConversationsList(response.data));
       await loadArchivedConversations();
+      await loadSavedMessages();
     } catch (error) {
       console.error('Failed to load conversations', error);
       showToast('Failed to load conversations from server', 'error');
@@ -485,6 +487,79 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Failed to restore conversation', error);
       showToast('Could not restore conversation', 'error');
+      return false;
+    }
+  };
+
+  const loadSavedMessages = async () => {
+    if (!token) return;
+    try {
+      const response = await apiClient.get<SavedMessage[]>('/messages/saved');
+      setSavedMessages(response.data);
+    } catch (error) {
+      console.error('Failed to load saved responses', error);
+    }
+  };
+
+  const saveMessage = async (messageId: number): Promise<boolean> => {
+    try {
+      await apiClient.post('/messages/save', { messageId });
+      showToast('Response saved.', 'success');
+      await loadSavedMessages();
+      return true;
+    } catch (error) {
+      console.error('Failed to save message', error);
+      showToast('Could not save response', 'error');
+      return false;
+    }
+  };
+
+  const unsaveMessage = async (messageId: number): Promise<boolean> => {
+    try {
+      await apiClient.delete(`/messages/save/${messageId}`);
+      showToast('Removed from saved.', 'success');
+      setSavedMessages((prev) => prev.filter((sm) => sm.messageId !== messageId));
+      return true;
+    } catch (error) {
+      console.error('Failed to remove saved message', error);
+      showToast('Could not remove from saved', 'error');
+      return false;
+    }
+  };
+
+  const toggleFeedback = async (messageId: number, type: 'Like' | 'Dislike'): Promise<boolean> => {
+    const msg = messages.find((m) => m.id === messageId);
+    if (!msg) return false;
+
+    const currentFeedback = msg.feedbackType;
+
+    try {
+      if (currentFeedback === type) {
+        // Remove reaction
+        await apiClient.delete(`/messages/feedback/${messageId}`);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, feedbackType: null } : m))
+        );
+        showToast('Feedback removed', 'info');
+      } else if (currentFeedback === null || currentFeedback === undefined) {
+        // Submit feedback
+        await apiClient.post('/messages/feedback', { messageId, feedbackType: type });
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, feedbackType: type } : m))
+        );
+        showToast('Feedback submitted', 'success');
+      } else {
+        // Switch reaction
+        await apiClient.put('/messages/feedback', { messageId, feedbackType: type });
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, feedbackType: type } : m))
+        );
+        showToast('Feedback updated', 'success');
+      }
+      return true;
+    } catch (error) {
+      console.error('Failed to update feedback', error);
+      showToast('Could not update feedback', 'error');
       return false;
     }
   };

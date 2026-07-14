@@ -32,6 +32,7 @@ export interface Message {
   isStopped?: boolean;
   isStreaming?: boolean;
   createdAt: string;
+  feedbackType?: 'Like' | 'Dislike' | null;
 }
 
 export interface AuthResponse {
@@ -52,4 +53,13 @@ export interface ChatResponse {
   totalTokens?: number;
   isStopped?: boolean;
   messageId?: number;
+}
+
+export interface SavedMessage {
+  id: number;
+  messageId: number;
+  conversationId: number;
+  conversationTitle: string;
+  content: string;
+  createdAt: string;
 }

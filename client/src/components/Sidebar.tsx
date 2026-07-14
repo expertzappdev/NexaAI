@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogOut, Plus, X, Pin, Search, Archive, ChevronDown, ChevronRight } from 'lucide-react';
+import { LogOut, Plus, X, Pin, Search, Archive, ChevronDown, ChevronRight, Star } from 'lucide-react';
 import { useChat } from '../store/ChatContext';
 import ConversationItem from './ConversationItem';
 
@@ -9,8 +9,28 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  const { conversations, createConversation, user, logout, searchQuery, setSearchQuery, archivedConversations } = useChat();
+  const {
+    conversations,
+    createConversation,
+    user,
+    logout,
+    searchQuery,
+    setSearchQuery,
+    archivedConversations,
+    savedMessages,
+    selectConversation,
+    unsaveMessage,
+    setScrollToMessageId
+  } = useChat();
+  
   const [archivedExpanded, setArchivedExpanded] = useState(false);
+  const [savedExpanded, setSavedExpanded] = useState(false);
+
+  const handleSavedMessageClick = async (conversationId: number, messageId: number) => {
+    setScrollToMessageId(messageId);
+    await selectConversation(conversationId);
+    onClose();
+  };
 
   const handleNewChat = async () => {
     await createConversation("New Chat");
@@ -152,6 +172,62 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   )}
                 </div>
               )}
+
+              {/* Saved Responses Section */}
+              <div className="border-t border-zinc-900/50 pt-3">
+                <button
+                  onClick={() => setSavedExpanded(!savedExpanded)}
+                  className="w-full px-3 py-1.5 text-[10px] font-bold text-zinc-500 hover:text-zinc-300 uppercase tracking-widest flex items-center justify-between transition-colors focus:outline-none"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" />
+                    <span>Saved Responses ({savedMessages.length})</span>
+                  </div>
+                  {savedExpanded ? (
+                    <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
+                  ) : (
+                    <ChevronRight className="w-3.5 h-3.5 text-zinc-500" />
+                  )}
+                </button>
+
+                {savedExpanded && (
+                  <div className="space-y-1.5 mt-2 max-h-60 overflow-y-auto px-1">
+                    {savedMessages.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-zinc-650 font-medium italic">
+                        No saved responses
+                      </div>
+                    ) : (
+                      savedMessages.map((sm) => (
+                        <div
+                          key={sm.id}
+                          onClick={() => handleSavedMessageClick(sm.conversationId, sm.messageId)}
+                          className="group relative flex flex-col items-start p-2.5 rounded-xl bg-zinc-900/30 hover:bg-zinc-900 border border-zinc-900/40 hover:border-zinc-800/80 cursor-pointer transition-all duration-200"
+                        >
+                          <div className="flex items-start justify-between w-full">
+                            <span className="text-[10px] font-bold text-amber-400/90 truncate max-w-[80%]">
+                              {sm.conversationTitle}
+                            </span>
+                            {/* Unsave Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                unsaveMessage(sm.messageId);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition-all focus:opacity-100"
+                              title="Remove from saved"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-zinc-400 group-hover:text-zinc-300 line-clamp-2 mt-1 leading-normal w-full break-all">
+                            {sm.content}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>

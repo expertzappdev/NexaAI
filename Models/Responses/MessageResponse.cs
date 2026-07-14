@@ -15,5 +15,6 @@ namespace AIChatBot.Models.Responses
         public DateTime? EditedAt { get; set; }
         public bool IsStopped { get; set; }
         public DateTime CreatedAt { get; set; }
+        public string? FeedbackType { get; set; }
     }
 }

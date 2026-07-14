@@ -31,6 +31,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     try {
       await navigator.clipboard.writeText(message.content);
       setCopied(true);
+      showToast('Copied to clipboard', 'success');
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy message content: ', err);
@@ -71,6 +72,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
   return (
     <motion.div
+      id={`message-${message.id}`}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
@@ -271,6 +273,34 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               </>
             )}
           </div>
+
+          {/* Feedback Buttons */}
+          {!isUser && (
+            <div className="flex items-center space-x-2 border-t border-zinc-850 mt-3 pt-2.5">
+              <button
+                onClick={() => toggleFeedback(message.id, 'Like')}
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all duration-200 ${
+                  message.feedbackType === 'Like'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.1)]'
+                    : 'bg-zinc-900/40 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                }`}
+              >
+                <span>👍</span>
+                <span>Helpful</span>
+              </button>
+              <button
+                onClick={() => toggleFeedback(message.id, 'Dislike')}
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all duration-200 ${
+                  message.feedbackType === 'Dislike'
+                    ? 'bg-red-500/10 border-red-500/30 text-red-400 shadow-[0_0_8px_rgba(239,68,68,0.1)]'
+                    : 'bg-zinc-900/40 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                }`}
+              >
+                <span>👎</span>
+                <span>Not Helpful</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </motion.div>
