@@ -27,6 +27,8 @@ export interface Message {
   completionTokens?: number;
   totalTokens?: number;
   model?: string;
+  isEdited?: boolean;
+  editedAt?: string;
   createdAt: string;
 }
 

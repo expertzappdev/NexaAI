@@ -15,7 +15,8 @@ class SignalrService {
     onErrorMessage: (error: string) => void,
     onConnectionChange: (connected: boolean) => void,
     onSearchStatus?: (status: string) => void,
-    onRegenerateComplete?: (payload: { messageId: number; content: string; model: string; totalTokens: number }) => void
+    onRegenerateComplete?: (payload: { messageId: number; content: string; model: string; totalTokens: number }) => void,
+    onEditMessageComplete?: (payload: { editedMessageId: number; newContent: string; editedAt: string; assistantResponse: { role: string; content: string; createdAt: string; model?: string; totalTokens?: number } }) => void
   ): Promise<void> {
     if (this.connection) {
       if (this.connection.state === HubConnectionState.Connected) {
@@ -73,6 +74,12 @@ class SignalrService {
       }
     });
 
+    this.connection.on('EditMessageComplete', (payload) => {
+      if (onEditMessageComplete) {
+        onEditMessageComplete(payload);
+      }
+    });
+
     this.connection.onreconnecting((error) => {
       console.warn('SignalR reconnecting due to error:', error);
       if (this.onConnectionChangeCallback) this.onConnectionChangeCallback(false);
@@ -126,6 +133,13 @@ class SignalrService {
       throw new Error('Cannot regenerate. SignalR is not connected.');
     }
     await this.connection.invoke('RegenerateResponse', messageId, model);
+  }
+
+  public async editMessage(messageId: number, content: string, model: string): Promise<void> {
+    if (!this.connection || this.connection.state !== HubConnectionState.Connected) {
+      throw new Error('Cannot edit message. SignalR is not connected.');
+    }
+    await this.connection.invoke('EditMessage', messageId, content, model);
   }
 
   public isConnected(): boolean {

@@ -11,6 +11,8 @@ namespace AIChatBot.Models.Responses
         public int? CompletionTokens { get; set; }
         public int? TotalTokens { get; set; }
         public string? Model { get; set; }
+        public bool IsEdited { get; set; }
+        public DateTime? EditedAt { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 }

@@ -71,5 +71,13 @@ namespace AIChatBot.Services
             string currentModel,
             System.Func<string, System.Threading.Tasks.Task>? onStatusUpdate = null,
             CancellationToken cancellationToken = default);
+
+        Task<ChatResponse> EditMessageAsync(
+            int userId,
+            int messageId,
+            string newContent,
+            string currentModel,
+            System.Func<string, System.Threading.Tasks.Task>? onStatusUpdate = null,
+            CancellationToken cancellationToken = default);
     }
 }

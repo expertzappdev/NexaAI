@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS `Messages` (
     `ConversationId` INT NOT NULL,
     `Role` VARCHAR(50) NOT NULL,
     `Content` LONGTEXT NOT NULL,
+    `IsEdited` TINYINT(1) NOT NULL DEFAULT 0,
+    `EditedAt` DATETIME(6) DEFAULT NULL,
     `CreatedAt` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     CONSTRAINT `FK_Messages_Conversations_ConversationId` FOREIGN KEY (`ConversationId`) 
         REFERENCES `Conversations` (`Id`) ON DELETE CASCADE

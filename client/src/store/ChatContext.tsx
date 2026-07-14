@@ -44,6 +44,9 @@ interface ChatContextType {
   restoreConversation: (id: number) => Promise<boolean>;
   regeneratingMessageId: number | null;
   regenerateResponse: (messageId: number) => Promise<void>;
+  editingMessageId: number | null;
+  setEditingMessageId: (id: number | null) => void;
+  editMessage: (messageId: number, content: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -63,6 +66,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<number | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
 
   // Store activeConversationId in a ref to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
@@ -108,11 +112,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsLoading(false);
           setSearchStatus(null);
           setRegeneratingMessageId(null);
+          setEditingMessageId(null);
         },
         (errorMsg) => {
           showToast(errorMsg, 'error');
           setSearchStatus(null);
           setRegeneratingMessageId(null);
+          setEditingMessageId(null);
           // Append error message to screen
           const currentId = activeConversationIdRef.current;
           if (currentId) {
@@ -143,6 +149,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             )
           );
           setRegeneratingMessageId(null);
+        },
+        (payload) => {
+          setMessages((prev) => {
+            const idx = prev.findIndex((m) => m.id === payload.editedMessageId);
+            if (idx === -1) return prev;
+            
+            const truncated = prev.slice(0, idx + 1);
+            truncated[idx] = {
+              ...truncated[idx],
+              content: payload.newContent,
+              isEdited: true,
+              editedAt: payload.editedAt
+            };
+            
+            return [
+              ...truncated,
+              {
+                id: Date.now() + Math.random(),
+                conversationId: truncated[idx].conversationId,
+                role: 'assistant',
+                content: payload.assistantResponse.content,
+                createdAt: payload.assistantResponse.createdAt,
+                model: payload.assistantResponse.model,
+                totalTokens: payload.assistantResponse.totalTokens
+              }
+            ];
+          });
+          setEditingMessageId(null);
         }
       ).catch((err) => {
         console.error('SignalR init connection failure:', err);
@@ -466,6 +500,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const editMessage = async (messageId: number, content: string) => {
+    if (editingMessageId !== null) return;
+    setEditingMessageId(messageId);
+    try {
+      await socketService.editMessage(messageId, content, selectedModel);
+    } catch (error) {
+      console.error('Failed to edit message via SignalR', error);
+      showToast('Failed to edit message.', 'error');
+      setEditingMessageId(null);
+    }
+  };
+
   const clearMessages = () => {
     setMessages([]);
     setActiveConversationId(null);
@@ -504,6 +550,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         restoreConversation,
         regeneratingMessageId,
         regenerateResponse,
+        editingMessageId,
+        setEditingMessageId,
+        editMessage,
       }}
     >
       {children}
