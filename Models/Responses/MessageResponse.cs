@@ -12,5 +12,6 @@ namespace AIChatBot.Models.Responses
         public int? TotalTokens { get; set; }
         public string? Model { get; set; }
         public DateTime CreatedAt { get; set; }
+        public string? FeedbackType { get; set; }
     }
 }

@@ -18,6 +18,7 @@ namespace AIChatBot.Services
         private readonly IGroqService _groqService;
         private readonly ITavilyService _tavilyService;
         private readonly IWebSearchDecisionService _webSearchDecisionService;
+        private readonly IRepository<MessageFeedback> _feedbackRepository;
         private readonly ILogger<ConversationService> _logger;
 
         public ConversationService(
@@ -26,6 +27,7 @@ namespace AIChatBot.Services
             IGroqService groqService,
             ITavilyService tavilyService,
             IWebSearchDecisionService webSearchDecisionService,
+            IRepository<MessageFeedback> feedbackRepository,
             ILogger<ConversationService> logger)
         {
             _conversationRepository = conversationRepository;
@@ -33,6 +35,7 @@ namespace AIChatBot.Services
             _groqService = groqService;
             _tavilyService = tavilyService;
             _webSearchDecisionService = webSearchDecisionService;
+            _feedbackRepository = feedbackRepository;
             _logger = logger;
         }
 
@@ -117,6 +120,12 @@ namespace AIChatBot.Services
                 throw new UnauthorizedAccessException("You are not authorized to access this conversation.");
             }
 
+            var messageIds = conversation.Messages.Select(m => m.Id).ToList();
+            var feedbacks = await _feedbackRepository.GetQueryable()
+                .AsNoTracking()
+                .Where(f => f.UserId == userId && messageIds.Contains(f.MessageId))
+                .ToDictionaryAsync(f => f.MessageId, f => f.FeedbackType, cancellationToken);
+
             var messages = conversation.Messages
                 .OrderBy(m => m.CreatedAt)
                 .Select(m => new MessageResponse
@@ -128,7 +137,8 @@ namespace AIChatBot.Services
                     CompletionTokens = m.CompletionTokens,
                     TotalTokens = m.TotalTokens,
                     Model = m.Model,
-                    CreatedAt = m.CreatedAt
+                    CreatedAt = m.CreatedAt,
+                    FeedbackType = feedbacks.ContainsKey(m.Id) ? feedbacks[m.Id].ToString() : null
                 })
                 .ToList();
 

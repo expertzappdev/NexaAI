@@ -20,5 +20,22 @@ namespace AIChatBot.Services
             int userId, 
             int messageId, 
             CancellationToken cancellationToken = default);
+
+        Task<bool> SubmitFeedbackAsync(
+            int userId,
+            int messageId,
+            string feedbackType,
+            CancellationToken cancellationToken = default);
+
+        Task<bool> UpdateFeedbackAsync(
+            int userId,
+            int messageId,
+            string feedbackType,
+            CancellationToken cancellationToken = default);
+
+        Task<bool> DeleteFeedbackAsync(
+            int userId,
+            int messageId,
+            CancellationToken cancellationToken = default);
     }
 }

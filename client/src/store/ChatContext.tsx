@@ -48,6 +48,7 @@ interface ChatContextType {
   unsaveMessage: (messageId: number) => Promise<boolean>;
   scrollToMessageId: number | null;
   setScrollToMessageId: (id: number | null) => void;
+  toggleFeedback: (messageId: number, type: 'Like' | 'Dislike') => Promise<boolean>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -366,6 +367,43 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const toggleFeedback = async (messageId: number, type: 'Like' | 'Dislike'): Promise<boolean> => {
+    const msg = messages.find((m) => m.id === messageId);
+    if (!msg) return false;
+
+    const currentFeedback = msg.feedbackType;
+
+    try {
+      if (currentFeedback === type) {
+        // Remove reaction
+        await apiClient.delete(`/messages/feedback/${messageId}`);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, feedbackType: null } : m))
+        );
+        showToast('Feedback removed', 'info');
+      } else if (currentFeedback === null || currentFeedback === undefined) {
+        // Submit feedback
+        await apiClient.post('/messages/feedback', { messageId, feedbackType: type });
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, feedbackType: type } : m))
+        );
+        showToast('Feedback submitted', 'success');
+      } else {
+        // Switch reaction
+        await apiClient.put('/messages/feedback', { messageId, feedbackType: type });
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, feedbackType: type } : m))
+        );
+        showToast('Feedback updated', 'success');
+      }
+      return true;
+    } catch (error) {
+      console.error('Failed to update feedback', error);
+      showToast('Could not update feedback', 'error');
+      return false;
+    }
+  };
+
   const selectConversation = async (id: number) => {
     setActiveConversationId(id);
     setIsLoading(true);
@@ -527,6 +565,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unsaveMessage,
         scrollToMessageId,
         setScrollToMessageId,
+        toggleFeedback,
       }}
     >
       {children}

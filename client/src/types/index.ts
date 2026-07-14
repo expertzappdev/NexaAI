@@ -28,6 +28,7 @@ export interface Message {
   totalTokens?: number;
   model?: string;
   createdAt: string;
+  feedbackType?: 'Like' | 'Dislike' | null;
 }
 
 export interface AuthResponse {

@@ -69,5 +69,54 @@ namespace AIChatBot.Controllers
 
             return Ok(new { message = "Removed from saved." });
         }
+
+        [HttpPost("feedback")]
+        public async Task<IActionResult> SubmitFeedback([FromBody] SubmitFeedbackRequest request, CancellationToken cancellationToken)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var userId = GetCurrentUserId();
+            var success = await _messageService.SubmitFeedbackAsync(userId, request.MessageId, request.FeedbackType, cancellationToken);
+            if (!success)
+            {
+                return BadRequest(new { message = "Failed to submit feedback. Message not found, not assistant role, or access denied." });
+            }
+
+            return Ok(new { message = "Feedback submitted." });
+        }
+
+        [HttpPut("feedback")]
+        public async Task<IActionResult> UpdateFeedback([FromBody] SubmitFeedbackRequest request, CancellationToken cancellationToken)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var userId = GetCurrentUserId();
+            var success = await _messageService.UpdateFeedbackAsync(userId, request.MessageId, request.FeedbackType, cancellationToken);
+            if (!success)
+            {
+                return BadRequest(new { message = "Failed to update feedback. Message not found, not assistant role, or access denied." });
+            }
+
+            return Ok(new { message = "Feedback updated." });
+        }
+
+        [HttpDelete("feedback/{messageId:int}")]
+        public async Task<IActionResult> DeleteFeedback(int messageId, CancellationToken cancellationToken)
+        {
+            var userId = GetCurrentUserId();
+            var success = await _messageService.DeleteFeedbackAsync(userId, messageId, cancellationToken);
+            if (!success)
+            {
+                return NotFound(new { message = "Feedback not found or access denied." });
+            }
+
+            return Ok(new { message = "Feedback removed." });
+        }
     }
 }

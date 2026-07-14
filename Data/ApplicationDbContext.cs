@@ -13,6 +13,7 @@ namespace AIChatBot.Data
         public DbSet<Conversation> Conversations => Set<Conversation>();
         public DbSet<Message> Messages => Set<Message>();
         public DbSet<SavedMessage> SavedMessages => Set<SavedMessage>();
+        public DbSet<MessageFeedback> MessageFeedbacks => Set<MessageFeedback>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -75,6 +76,27 @@ namespace AIChatBot.Data
             {
                 entity.ToTable("SavedMessages");
                 entity.HasKey(e => e.Id);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP(6)");
+
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Message)
+                    .WithMany()
+                    .HasForeignKey(e => e.MessageId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(e => new { e.UserId, e.MessageId }).IsUnique();
+            });
+
+            // MessageFeedback configuration
+            modelBuilder.Entity<MessageFeedback>(entity =>
+            {
+                entity.ToTable("MessageFeedbacks");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.FeedbackType).HasConversion<string>().HasMaxLength(50);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP(6)");
 
                 entity.HasOne(e => e.User)

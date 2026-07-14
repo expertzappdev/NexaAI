@@ -14,13 +14,16 @@ namespace AIChatBot.Services
     {
         private readonly IRepository<SavedMessage> _savedMessageRepository;
         private readonly IRepository<Message> _messageRepository;
+        private readonly IRepository<MessageFeedback> _feedbackRepository;
 
         public MessageService(
             IRepository<SavedMessage> savedMessageRepository,
-            IRepository<Message> messageRepository)
+            IRepository<Message> messageRepository,
+            IRepository<MessageFeedback> feedbackRepository)
         {
             _savedMessageRepository = savedMessageRepository;
             _messageRepository = messageRepository;
+            _feedbackRepository = feedbackRepository;
         }
 
         public async Task<IEnumerable<SavedMessageResponse>> GetSavedMessagesForUserAsync(
@@ -96,6 +99,94 @@ namespace AIChatBot.Services
 
             _savedMessageRepository.Delete(savedMessage);
             return await _savedMessageRepository.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task<bool> SubmitFeedbackAsync(
+            int userId,
+            int messageId,
+            string feedbackType,
+            CancellationToken cancellationToken = default)
+        {
+            var message = await _messageRepository.GetQueryable()
+                .Include(m => m.Conversation)
+                .FirstOrDefaultAsync(m => m.Id == messageId, cancellationToken);
+
+            if (message == null || message.Conversation == null || message.Conversation.UserId != userId)
+            {
+                return false;
+            }
+
+            if (message.Role != "assistant")
+            {
+                return false;
+            }
+
+            if (!Enum.TryParse<FeedbackType>(feedbackType, true, out var parsedType))
+            {
+                return false;
+            }
+
+            var existing = await _feedbackRepository.GetQueryable()
+                .FirstOrDefaultAsync(f => f.UserId == userId && f.MessageId == messageId, cancellationToken);
+
+            if (existing != null)
+            {
+                existing.FeedbackType = parsedType;
+                _feedbackRepository.Update(existing);
+                return await _feedbackRepository.SaveChangesAsync(cancellationToken);
+            }
+
+            var feedback = new MessageFeedback
+            {
+                UserId = userId,
+                MessageId = messageId,
+                FeedbackType = parsedType,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _feedbackRepository.AddAsync(feedback, cancellationToken);
+            return await _feedbackRepository.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task<bool> UpdateFeedbackAsync(
+            int userId,
+            int messageId,
+            string feedbackType,
+            CancellationToken cancellationToken = default)
+        {
+            if (!Enum.TryParse<FeedbackType>(feedbackType, true, out var parsedType))
+            {
+                return false;
+            }
+
+            var existing = await _feedbackRepository.GetQueryable()
+                .FirstOrDefaultAsync(f => f.UserId == userId && f.MessageId == messageId, cancellationToken);
+
+            if (existing == null)
+            {
+                return await SubmitFeedbackAsync(userId, messageId, feedbackType, cancellationToken);
+            }
+
+            existing.FeedbackType = parsedType;
+            _feedbackRepository.Update(existing);
+            return await _feedbackRepository.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task<bool> DeleteFeedbackAsync(
+            int userId,
+            int messageId,
+            CancellationToken cancellationToken = default)
+        {
+            var existing = await _feedbackRepository.GetQueryable()
+                .FirstOrDefaultAsync(f => f.UserId == userId && f.MessageId == messageId, cancellationToken);
+
+            if (existing == null)
+            {
+                return false;
+            }
+
+            _feedbackRepository.Delete(existing);
+            return await _feedbackRepository.SaveChangesAsync(cancellationToken);
         }
     }
 }
