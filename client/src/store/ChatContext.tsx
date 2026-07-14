@@ -28,6 +28,7 @@ interface ChatContextType {
   createConversation: (title: string) => Promise<number | null>;
   renameConversation: (id: number, title: string) => Promise<boolean>;
   deleteConversation: (id: number) => Promise<boolean>;
+  pinConversation: (id: number, isPinned: boolean) => Promise<boolean>;
   sendMessage: (text: string) => Promise<void>;
   clearMessages: () => void;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
@@ -35,6 +36,12 @@ interface ChatContextType {
   setSelectedModel: (model: string) => void;
   availableModels: AIModel[];
   searchStatus: string | null;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  archivedConversations: Conversation[];
+  loadArchivedConversations: () => Promise<void>;
+  archiveConversation: (id: number) => Promise<boolean>;
+  restoreConversation: (id: number) => Promise<boolean>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -51,6 +58,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [selectedModel, setSelectedModel] = useState<string>('llama-3.1-8b-instant');
   const [availableModels, setAvailableModels] = useState<AIModel[]>(AI_MODELS);
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
 
   // Store activeConversationId in a ref to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
@@ -175,6 +184,30 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // Debounced search effect
+  useEffect(() => {
+    if (!token) return;
+
+    if (searchQuery.trim() === '') {
+      loadConversations();
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const response = await apiClient.get<Conversation[]>(
+          `/conversations/search?query=${encodeURIComponent(searchQuery.trim())}`
+        );
+        setConversations(sortConversationsList(response.data));
+      } catch (error) {
+        console.error('Failed to search conversations', error);
+        showToast('Search failed', 'error');
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery, token]);
+
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now();
     setToasts((prev) => [...prev, { id, message, type }]);
@@ -207,19 +240,83 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(null);
     setUser(null);
     setConversations([]);
+    setArchivedConversations([]);
     setActiveConversationId(null);
     setMessages([]);
     showToast('Signed out successfully', 'info');
+  };
+
+  const loadArchivedConversations = async () => {
+    if (!token) return;
+    try {
+      const response = await apiClient.get<Conversation[]>('/conversations/archived');
+      setArchivedConversations(response.data.sort((a, b) => new Date(b.archivedAt || b.createdAt).getTime() - new Date(a.archivedAt || a.createdAt).getTime()));
+    } catch (error) {
+      console.error('Failed to load archived conversations', error);
+    }
   };
 
   const loadConversations = async () => {
     if (!token) return;
     try {
       const response = await apiClient.get<Conversation[]>('/conversations');
-      setConversations(response.data);
+      setConversations(sortConversationsList(response.data));
+      await loadArchivedConversations();
     } catch (error) {
       console.error('Failed to load conversations', error);
       showToast('Failed to load conversations from server', 'error');
+    }
+  };
+
+  const archiveConversation = async (id: number): Promise<boolean> => {
+    try {
+      await apiClient.put(`/conversations/${id}/archive`);
+      const conversationToArchive = conversations.find((c) => c.id === id);
+      if (conversationToArchive) {
+        const updatedConv: Conversation = {
+          ...conversationToArchive,
+          isArchived: true,
+          archivedAt: new Date().toISOString(),
+          isPinned: false,
+          pinnedAt: undefined,
+        };
+        setConversations((prev) => prev.filter((c) => c.id !== id));
+        setArchivedConversations((prev) => 
+          [updatedConv, ...prev].sort((a, b) => new Date(b.archivedAt || b.createdAt).getTime() - new Date(a.archivedAt || a.createdAt).getTime())
+        );
+      }
+      if (activeConversationId === id) {
+        setActiveConversationId(null);
+        setMessages([]);
+      }
+      showToast('Conversation archived', 'success');
+      return true;
+    } catch (error) {
+      console.error('Failed to archive conversation', error);
+      showToast('Could not archive conversation', 'error');
+      return false;
+    }
+  };
+
+  const restoreConversation = async (id: number): Promise<boolean> => {
+    try {
+      await apiClient.put(`/conversations/${id}/restore`);
+      const conversationToRestore = archivedConversations.find((c) => c.id === id);
+      if (conversationToRestore) {
+        const updatedConv: Conversation = {
+          ...conversationToRestore,
+          isArchived: false,
+          archivedAt: undefined,
+        };
+        setArchivedConversations((prev) => prev.filter((c) => c.id !== id));
+        setConversations((prev) => sortConversationsList([updatedConv, ...prev]));
+      }
+      showToast('Conversation restored', 'success');
+      return true;
+    } catch (error) {
+      console.error('Failed to restore conversation', error);
+      showToast('Could not restore conversation', 'error');
+      return false;
     }
   };
 
@@ -245,7 +342,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const response = await apiClient.post<Conversation>('/conversations', { title });
       const newConv = response.data;
-      setConversations((prev) => [newConv, ...prev]);
+      setConversations((prev) => sortConversationsList([newConv, ...prev]));
       setActiveConversationId(newConv.id);
       setMessages([]);
       return newConv.id;
@@ -275,6 +372,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await apiClient.delete(`/conversations/${id}`);
       setConversations((prev) => prev.filter((c) => c.id !== id));
+      setArchivedConversations((prev) => prev.filter((c) => c.id !== id));
       if (activeConversationId === id) {
         setActiveConversationId(null);
         setMessages([]);
@@ -284,6 +382,39 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Failed to delete conversation', error);
       showToast('Could not delete conversation', 'error');
+      return false;
+    }
+  };
+
+  const sortConversationsList = (list: Conversation[]): Conversation[] => {
+    return [...list].sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      if (a.isPinned && b.isPinned) {
+        return new Date(b.pinnedAt || b.createdAt).getTime() - new Date(a.pinnedAt || a.createdAt).getTime();
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  };
+
+  const pinConversation = async (id: number, isPinned: boolean): Promise<boolean> => {
+    try {
+      await apiClient.patch(`/conversations/${id}/pin`, { isPinned });
+      setConversations((prev) =>
+        sortConversationsList(
+          prev.map((c) =>
+            c.id === id
+              ? { ...c, isPinned, pinnedAt: isPinned ? new Date().toISOString() : undefined }
+              : c
+          )
+        )
+      );
+      showToast(isPinned ? 'Conversation pinned' : 'Conversation unpinned', 'success');
+      return true;
+    } catch (error: any) {
+      console.error('Failed to pin/unpin conversation', error);
+      const errMsg = error?.response?.data?.errorMessage || 'Could not update pin status';
+      showToast(errMsg, 'error');
       return false;
     }
   };
@@ -330,6 +461,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         createConversation,
         renameConversation,
         deleteConversation,
+        pinConversation,
         sendMessage,
         clearMessages,
         showToast,
@@ -337,6 +469,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSelectedModel,
         availableModels,
         searchStatus,
+        searchQuery,
+        setSearchQuery,
+        archivedConversations,
+        loadArchivedConversations,
+        archiveConversation,
+        restoreConversation,
       }}
     >
       {children}

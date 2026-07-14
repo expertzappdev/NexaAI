@@ -52,6 +52,68 @@ namespace AIChatBot.Controllers
             return Ok(list);
         }
 
+        [HttpGet("search")]
+        public async Task<IActionResult> Search([FromQuery] string query, CancellationToken cancellationToken)
+        {
+            var userId = GetCurrentUserId();
+            var list = await _conversationService.SearchConversationsAsync(userId, query, cancellationToken);
+            return Ok(list);
+        }
+
+        [HttpGet("archived")]
+        public async Task<IActionResult> GetArchived(CancellationToken cancellationToken)
+        {
+            var userId = GetCurrentUserId();
+            var list = await _conversationService.GetArchivedConversationsForUserAsync(userId, cancellationToken);
+            return Ok(list);
+        }
+
+        [HttpPut("{conversationId:int}/archive")]
+        public async Task<IActionResult> Archive(int conversationId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+                var success = await _conversationService.ArchiveConversationAsync(userId, conversationId, cancellationToken);
+                if (!success)
+                {
+                    return BadRequest(new { Success = false, ErrorMessage = "Failed to archive conversation." });
+                }
+                return Ok(new { Success = true });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Success = false, ErrorMessage = ex.Message });
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
+        [HttpPut("{conversationId:int}/restore")]
+        public async Task<IActionResult> Restore(int conversationId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+                var success = await _conversationService.RestoreConversationAsync(userId, conversationId, cancellationToken);
+                if (!success)
+                {
+                    return BadRequest(new { Success = false, ErrorMessage = "Failed to restore conversation." });
+                }
+                return Ok(new { Success = true });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Success = false, ErrorMessage = ex.Message });
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
+
         [HttpGet("{conversationId:int}")]
         public async Task<IActionResult> GetById(int conversationId, CancellationToken cancellationToken)
         {
@@ -89,6 +151,39 @@ namespace AIChatBot.Controllers
             }
 
             return Ok(new { Success = true });
+        }
+
+        [HttpPatch("{conversationId:int}/pin")]
+        public async Task<IActionResult> Pin(int conversationId, [FromBody] PinConversationRequest request, CancellationToken cancellationToken)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            try
+            {
+                var userId = GetCurrentUserId();
+                var success = await _conversationService.PinConversationAsync(userId, conversationId, request.IsPinned, cancellationToken);
+                if (!success)
+                {
+                    return BadRequest(new { Success = false, ErrorMessage = "Failed to update pin status." });
+                }
+
+                return Ok(new { Success = true });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Success = false, ErrorMessage = ex.Message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Success = false, ErrorMessage = ex.Message });
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
         }
     }
 }

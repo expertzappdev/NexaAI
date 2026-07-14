@@ -32,6 +32,31 @@ namespace AIChatBot.Services
             int conversationId, 
             CancellationToken cancellationToken = default);
 
+        Task<bool> PinConversationAsync(
+            int userId, 
+            int conversationId, 
+            bool isPinned, 
+            CancellationToken cancellationToken = default);
+
+        Task<IEnumerable<ConversationResponse>> SearchConversationsAsync(
+            int userId, 
+            string query, 
+            CancellationToken cancellationToken = default);
+
+        Task<IEnumerable<ConversationResponse>> GetArchivedConversationsForUserAsync(
+            int userId, 
+            CancellationToken cancellationToken = default);
+
+        Task<bool> ArchiveConversationAsync(
+            int userId, 
+            int conversationId, 
+            CancellationToken cancellationToken = default);
+
+        Task<bool> RestoreConversationAsync(
+            int userId, 
+            int conversationId, 
+            CancellationToken cancellationToken = default);
+
         Task<ChatResponse> ProcessSendMessageAsync(
             int userId, 
             int conversationId, 
