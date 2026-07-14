@@ -20,9 +20,9 @@ builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"
 builder.Services.Configure<TavilySettings>(builder.Configuration.GetSection("Tavily"));
 
 // Add database context
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? Environment.GetEnvironmentVariable("MYSQL_URL")
-    ?? Environment.GetEnvironmentVariable("DATABASE_URL");
+var connectionString = Environment.GetEnvironmentVariable("MYSQL_URL")
+    ?? Environment.GetEnvironmentVariable("DATABASE_URL")
+    ?? builder.Configuration.GetConnectionString("DefaultConnection");
 
 if (string.IsNullOrEmpty(connectionString))
 {
@@ -42,7 +42,7 @@ if (connectionString.StartsWith("mysql://", StringComparison.OrdinalIgnoreCase))
         var port = uri.Port > 0 ? uri.Port : 3306;
         var database = uri.AbsolutePath.TrimStart('/');
         
-        connectionString = $"Server={host};Port={port};Database={database};Uid={username};Pwd={password};SSL Mode=None;";
+        connectionString = $"Server={host};Port={port};Database={database};Uid={username};Pwd={password};SslMode=Preferred;";
     }
     catch (Exception ex)
     {
