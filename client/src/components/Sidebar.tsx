@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogOut, Plus, X } from 'lucide-react';
+import { LogOut, Plus, X, Pin } from 'lucide-react';
 import { useChat } from '../store/ChatContext';
 import ConversationItem from './ConversationItem';
 
@@ -61,20 +61,38 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Conversation List / History */}
-        <div className="flex-grow overflow-y-auto px-3 border-t border-zinc-900/50 mt-2 pt-2">
-          <div className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-            Recent Conversations
-          </div>
-          <div className="space-y-1 mt-1">
-            {conversations.length > 0 ? (
-              conversations.map((conv) => (
-                <ConversationItem key={conv.id} conversation={conv} />
-              ))
-            ) : (
-              <div className="text-center py-6 text-xs text-zinc-600 font-medium">
-                No conversations
+        <div className="flex-grow overflow-y-auto px-3 border-t border-zinc-900/50 mt-2 pt-2 space-y-4">
+          {/* Pinned section */}
+          {conversations.filter(c => c.isPinned).length > 0 && (
+            <div>
+              <div className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+                <Pin className="w-3 h-3 text-indigo-400" />
+                <span>Pinned Conversations</span>
               </div>
-            )}
+              <div className="space-y-1 mt-1">
+                {conversations.filter(c => c.isPinned).map((conv) => (
+                  <ConversationItem key={conv.id} conversation={conv} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent section */}
+          <div>
+            <div className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+              Recent Conversations
+            </div>
+            <div className="space-y-1 mt-1">
+              {conversations.filter(c => !c.isPinned).length > 0 ? (
+                conversations.filter(c => !c.isPinned).map((conv) => (
+                  <ConversationItem key={conv.id} conversation={conv} />
+                ))
+              ) : conversations.filter(c => c.isPinned).length === 0 ? (
+                <div className="text-center py-6 text-xs text-zinc-600 font-medium">
+                  No conversations
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 

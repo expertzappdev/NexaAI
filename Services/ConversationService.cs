@@ -72,13 +72,17 @@ namespace AIChatBot.Services
             var list = await _conversationRepository.GetQueryable()
                 .AsNoTracking()
                 .Where(c => c.UserId == userId)
-                .OrderByDescending(c => c.UpdatedAt)
+                .OrderByDescending(c => c.IsPinned)
+                .ThenByDescending(c => c.PinnedAt)
+                .ThenByDescending(c => c.CreatedAt)
                 .Select(c => new ConversationResponse
                 {
                     Id = c.Id,
                     UserId = c.UserId,
                     Title = c.Title,
                     SelectedModel = c.SelectedModel,
+                    IsPinned = c.IsPinned,
+                    PinnedAt = c.PinnedAt,
                     CreatedAt = c.CreatedAt,
                     UpdatedAt = c.UpdatedAt
                 })
@@ -127,6 +131,8 @@ namespace AIChatBot.Services
                 Id = conversation.Id,
                 Title = conversation.Title,
                 SelectedModel = conversation.SelectedModel,
+                IsPinned = conversation.IsPinned,
+                PinnedAt = conversation.PinnedAt,
                 CreatedAt = conversation.CreatedAt,
                 UpdatedAt = conversation.UpdatedAt,
                 Messages = messages
@@ -174,6 +180,46 @@ namespace AIChatBot.Services
             }
 
             _conversationRepository.Delete(conversation);
+            return await _conversationRepository.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task<bool> PinConversationAsync(
+            int userId, 
+            int conversationId, 
+            bool isPinned, 
+            CancellationToken cancellationToken = default)
+        {
+            var conversation = await _conversationRepository.GetByIdAsync(conversationId, cancellationToken);
+            if (conversation == null)
+            {
+                throw new KeyNotFoundException($"Conversation with ID {conversationId} was not found.");
+            }
+
+            if (conversation.UserId != userId)
+            {
+                throw new UnauthorizedAccessException("You are not authorized to modify this conversation.");
+            }
+
+            if (isPinned)
+            {
+                var pinnedCount = await _conversationRepository.GetQueryable()
+                    .CountAsync(c => c.UserId == userId && c.IsPinned, cancellationToken);
+
+                if (pinnedCount >= 10)
+                {
+                    throw new InvalidOperationException("Maximum of 10 pinned conversations allowed.");
+                }
+
+                conversation.IsPinned = true;
+                conversation.PinnedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                conversation.IsPinned = false;
+                conversation.PinnedAt = null;
+            }
+
+            _conversationRepository.Update(conversation);
             return await _conversationRepository.SaveChangesAsync(cancellationToken);
         }
 

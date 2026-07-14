@@ -28,6 +28,7 @@ interface ChatContextType {
   createConversation: (title: string) => Promise<number | null>;
   renameConversation: (id: number, title: string) => Promise<boolean>;
   deleteConversation: (id: number) => Promise<boolean>;
+  pinConversation: (id: number, isPinned: boolean) => Promise<boolean>;
   sendMessage: (text: string) => Promise<void>;
   clearMessages: () => void;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
@@ -216,7 +217,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!token) return;
     try {
       const response = await apiClient.get<Conversation[]>('/conversations');
-      setConversations(response.data);
+      setConversations(sortConversationsList(response.data));
     } catch (error) {
       console.error('Failed to load conversations', error);
       showToast('Failed to load conversations from server', 'error');
@@ -245,7 +246,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const response = await apiClient.post<Conversation>('/conversations', { title });
       const newConv = response.data;
-      setConversations((prev) => [newConv, ...prev]);
+      setConversations((prev) => sortConversationsList([newConv, ...prev]));
       setActiveConversationId(newConv.id);
       setMessages([]);
       return newConv.id;
@@ -284,6 +285,39 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Failed to delete conversation', error);
       showToast('Could not delete conversation', 'error');
+      return false;
+    }
+  };
+
+  const sortConversationsList = (list: Conversation[]): Conversation[] => {
+    return [...list].sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      if (a.isPinned && b.isPinned) {
+        return new Date(b.pinnedAt || b.createdAt).getTime() - new Date(a.pinnedAt || a.createdAt).getTime();
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  };
+
+  const pinConversation = async (id: number, isPinned: boolean): Promise<boolean> => {
+    try {
+      await apiClient.patch(`/conversations/${id}/pin`, { isPinned });
+      setConversations((prev) =>
+        sortConversationsList(
+          prev.map((c) =>
+            c.id === id
+              ? { ...c, isPinned, pinnedAt: isPinned ? new Date().toISOString() : undefined }
+              : c
+          )
+        )
+      );
+      showToast(isPinned ? 'Conversation pinned' : 'Conversation unpinned', 'success');
+      return true;
+    } catch (error: any) {
+      console.error('Failed to pin/unpin conversation', error);
+      const errMsg = error?.response?.data?.errorMessage || 'Could not update pin status';
+      showToast(errMsg, 'error');
       return false;
     }
   };
@@ -330,6 +364,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         createConversation,
         renameConversation,
         deleteConversation,
+        pinConversation,
         sendMessage,
         clearMessages,
         showToast,

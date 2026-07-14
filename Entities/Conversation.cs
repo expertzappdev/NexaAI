@@ -9,6 +9,8 @@ namespace AIChatBot.Entities
         public int UserId { get; set; }
         public string Title { get; set; } = string.Empty;
         public string SelectedModel { get; set; } = "llama-3.1-8b-instant";
+        public bool IsPinned { get; set; } = false;
+        public DateTime? PinnedAt { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

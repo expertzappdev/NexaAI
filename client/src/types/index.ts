@@ -10,6 +10,8 @@ export interface Conversation {
   userId: number;
   title: string;
   selectedModel?: string;
+  isPinned: boolean;
+  pinnedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

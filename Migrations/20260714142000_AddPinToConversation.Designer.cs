@@ -3,6 +3,7 @@ using System;
 using AIChatBot.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AIChatBot.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260714142000_AddPinToConversation")]
+    partial class AddPinToConversation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -30,13 +33,6 @@ namespace AIChatBot.Migrations
                         .HasColumnType("datetime(6)")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP(6)");
 
-                    b.Property<string>("SelectedModel")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(150)
-                        .HasColumnType("varchar(150)")
-                        .HasDefaultValue("llama-3.1-8b-instant");
-
                     b.Property<bool>("IsPinned")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("tinyint(1)")
@@ -44,6 +40,13 @@ namespace AIChatBot.Migrations
 
                     b.Property<DateTime?>("PinnedAt")
                         .HasColumnType("datetime(6)");
+
+                    b.Property<string>("SelectedModel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasDefaultValue("llama-3.1-8b-instant");
 
                     b.Property<string>("Title")
                         .IsRequired()

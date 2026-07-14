@@ -90,5 +90,38 @@ namespace AIChatBot.Controllers
 
             return Ok(new { Success = true });
         }
+
+        [HttpPatch("{conversationId:int}/pin")]
+        public async Task<IActionResult> Pin(int conversationId, [FromBody] PinConversationRequest request, CancellationToken cancellationToken)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            try
+            {
+                var userId = GetCurrentUserId();
+                var success = await _conversationService.PinConversationAsync(userId, conversationId, request.IsPinned, cancellationToken);
+                if (!success)
+                {
+                    return BadRequest(new { Success = false, ErrorMessage = "Failed to update pin status." });
+                }
+
+                return Ok(new { Success = true });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Success = false, ErrorMessage = ex.Message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Success = false, ErrorMessage = ex.Message });
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+        }
     }
 }
