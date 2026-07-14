@@ -6,13 +6,26 @@ import EmptyState from './EmptyState';
 import TypingIndicator from './TypingIndicator';
 
 const ChatWindow: React.FC = () => {
-  const { messages, isLoading } = useChat();
+  const { messages, isLoading, scrollToMessageId, setScrollToMessageId } = useChat();
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Auto scroll to bottom on message updates
+  // Auto scroll to bottom or to a specific message on update
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+    if (scrollToMessageId) {
+      const element = document.getElementById(`message-${scrollToMessageId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Highlight the message briefly for a premium feel
+        element.classList.add('ring-2', 'ring-amber-500/50', 'bg-amber-500/5', 'rounded-2xl', 'transition-all', 'duration-500');
+        setTimeout(() => {
+          element.classList.remove('ring-2', 'ring-amber-500/50', 'bg-amber-500/5');
+        }, 2000);
+        setScrollToMessageId(null);
+      }
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isLoading, scrollToMessageId, setScrollToMessageId]);
 
   const hasMessages = messages.length > 0;
 

@@ -37,6 +37,37 @@ CREATE TABLE IF NOT EXISTS `Messages` (
         REFERENCES `Conversations` (`Id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- 4. SavedMessages Table
+CREATE TABLE IF NOT EXISTS `SavedMessages` (
+    `Id` INT AUTO_INCREMENT PRIMARY KEY,
+    `UserId` INT NOT NULL,
+    `MessageId` INT NOT NULL,
+    `CreatedAt` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT `FK_SavedMessages_Users_UserId` FOREIGN KEY (`UserId`) 
+        REFERENCES `Users` (`Id`) ON DELETE CASCADE,
+    CONSTRAINT `FK_SavedMessages_Messages_MessageId` FOREIGN KEY (`MessageId`) 
+        REFERENCES `Messages` (`Id`) ON DELETE CASCADE,
+    CONSTRAINT `UQ_SavedMessages_User_Message` UNIQUE (`UserId`, `MessageId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- 5. MessageFeedbacks Table
+CREATE TABLE IF NOT EXISTS `MessageFeedbacks` (
+    `Id` INT AUTO_INCREMENT PRIMARY KEY,
+    `UserId` INT NOT NULL,
+    `MessageId` INT NOT NULL,
+    `FeedbackType` VARCHAR(50) NOT NULL,
+    `CreatedAt` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT `FK_MessageFeedbacks_Users_UserId` FOREIGN KEY (`UserId`) 
+        REFERENCES `Users` (`Id`) ON DELETE CASCADE,
+    CONSTRAINT `FK_MessageFeedbacks_Messages_MessageId` FOREIGN KEY (`MessageId`) 
+        REFERENCES `Messages` (`Id`) ON DELETE CASCADE,
+    CONSTRAINT `UQ_MessageFeedbacks_User_Message` UNIQUE (`UserId`, `MessageId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- Indexes for optimized querying
 CREATE INDEX `IX_Conversations_UserId` ON `Conversations` (`UserId`);
 CREATE INDEX `IX_Messages_ConversationId` ON `Messages` (`ConversationId`);
+CREATE INDEX `IX_SavedMessages_UserId` ON `SavedMessages` (`UserId`);
+CREATE INDEX `IX_SavedMessages_MessageId` ON `SavedMessages` (`MessageId`);
+CREATE INDEX `IX_MessageFeedbacks_UserId` ON `MessageFeedbacks` (`UserId`);
+CREATE INDEX `IX_MessageFeedbacks_MessageId` ON `MessageFeedbacks` (`MessageId`);

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Copy, Check, Brain, ChevronDown, ChevronUp } from 'lucide-react';
+import { User, Copy, Check, Brain, ChevronDown, ChevronUp, Star } from 'lucide-react';
 import type { Message } from '../types';
 import MarkdownRenderer from './MarkdownRenderer';
+import { useChat } from '../store/ChatContext';
 
 interface MessageBubbleProps {
   message: Message;
@@ -12,11 +13,31 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const { showToast, savedMessages, saveMessage, unsaveMessage, toggleFeedback } = useChat();
+
+  const isSaved = savedMessages.some((sm) => sm.messageId === message.id);
+
+  const handleSaveToggle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      if (isSaved) {
+        await unsaveMessage(message.id);
+      } else {
+        await saveMessage(message.id);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(message.content);
       setCopied(true);
+      showToast('Copied to clipboard', 'success');
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy message content: ', err);
@@ -57,6 +78,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
   return (
     <motion.div
+      id={`message-${message.id}`}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
@@ -84,15 +106,37 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             ? 'bg-gradient-to-tr from-blue-600 to-purple-600 border-indigo-500/25 text-white rounded-tr-none shadow-purple-600/5' 
             : 'bg-zinc-900/40 backdrop-blur-md border-zinc-800/80 text-zinc-150 rounded-tl-none'
         }`}>
-          {/* Copy Button (visible on hover) */}
-          <button
-            onClick={handleCopy}
-            className={`absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-800 transition-all text-zinc-400 hover:text-zinc-200 focus:outline-none focus:opacity-100 ${
-              isUser ? 'text-zinc-200 hover:text-white bg-indigo-900/60 hover:bg-indigo-900' : ''
-            }`}
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-          </button>
+          {/* Action Buttons (visible on hover) */}
+          {isUser ? (
+            <button
+              onClick={handleCopy}
+              className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-indigo-900/60 hover:bg-indigo-900 transition-all text-zinc-250 hover:text-white focus:outline-none focus:opacity-100"
+              title="Copy message"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          ) : (
+            <div className="absolute top-2.5 right-2.5 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+              {/* Save Button */}
+              <button
+                onClick={handleSaveToggle}
+                disabled={isSaving}
+                className="p-1.5 rounded-lg bg-zinc-850 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-amber-400 transition-all focus:outline-none focus:opacity-100"
+                title={isSaved ? "Remove from saved" : "Save response"}
+              >
+                <Star className={`w-3.5 h-3.5 ${isSaved ? 'fill-amber-400 text-amber-400' : ''}`} />
+              </button>
+              
+              {/* Copy Button */}
+              <button
+                onClick={handleCopy}
+                className="p-1.5 rounded-lg bg-zinc-850 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-all focus:outline-none focus:opacity-100"
+                title="Copy response"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          )}
 
           {/* Thinking Block Section */}
           {!isUser && thinking && (
@@ -158,6 +202,34 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               </>
             )}
           </div>
+
+          {/* Feedback Buttons */}
+          {!isUser && (
+            <div className="flex items-center space-x-2 border-t border-zinc-850 mt-3 pt-2.5">
+              <button
+                onClick={() => toggleFeedback(message.id, 'Like')}
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all duration-200 ${
+                  message.feedbackType === 'Like'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.1)]'
+                    : 'bg-zinc-900/40 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                }`}
+              >
+                <span>👍</span>
+                <span>Helpful</span>
+              </button>
+              <button
+                onClick={() => toggleFeedback(message.id, 'Dislike')}
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-all duration-200 ${
+                  message.feedbackType === 'Dislike'
+                    ? 'bg-red-500/10 border-red-500/30 text-red-400 shadow-[0_0_8px_rgba(239,68,68,0.1)]'
+                    : 'bg-zinc-900/40 border-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+                }`}
+              >
+                <span>👎</span>
+                <span>Not Helpful</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

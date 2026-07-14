@@ -28,6 +28,7 @@ export interface Message {
   totalTokens?: number;
   model?: string;
   createdAt: string;
+  feedbackType?: 'Like' | 'Dislike' | null;
 }
 
 export interface AuthResponse {
@@ -46,4 +47,13 @@ export interface ChatResponse {
   message: string;
   model?: string;
   totalTokens?: number;
+}
+
+export interface SavedMessage {
+  id: number;
+  messageId: number;
+  conversationId: number;
+  conversationTitle: string;
+  content: string;
+  createdAt: string;
 }
