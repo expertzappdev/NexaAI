@@ -9,8 +9,30 @@ interface ConversationItemProps {
 }
 
 const ConversationItem: React.FC<ConversationItemProps> = ({ conversation }) => {
-  const { activeConversationId, selectConversation, renameConversation, deleteConversation, pinConversation } = useChat();
+  const { activeConversationId, selectConversation, renameConversation, deleteConversation, pinConversation, searchQuery } = useChat();
   const isActive = activeConversationId === conversation.id;
+
+  const highlightText = (text: string, highlight: string) => {
+    if (!highlight.trim()) {
+      return <>{text}</>;
+    }
+    const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escapeRegExp(highlight)})`, 'gi');
+    const parts = text.split(regex);
+    return (
+      <>
+        {parts.map((part, i) =>
+          regex.test(part) ? (
+            <mark key={i} className="bg-yellow-500/30 text-yellow-100 rounded-sm px-0.5 font-semibold">
+              {part}
+            </mark>
+          ) : (
+            part
+          )
+        )}
+      </>
+    );
+  };
 
   const [isEditing, setIsEditing] = useState(false);
   const [titleInput, setTitleInput] = useState(conversation.title);
@@ -95,7 +117,9 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ conversation }) => 
             </button>
           </form>
         ) : (
-          <span className="text-xs truncate mr-5">{conversation.title}</span>
+          <span className="text-xs truncate mr-5">
+            {highlightText(conversation.title, searchQuery)}
+          </span>
         )}
       </div>
 

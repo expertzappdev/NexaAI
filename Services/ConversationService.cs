@@ -223,6 +223,42 @@ namespace AIChatBot.Services
             return await _conversationRepository.SaveChangesAsync(cancellationToken);
         }
 
+        public async Task<IEnumerable<ConversationResponse>> SearchConversationsAsync(
+            int userId, 
+            string query, 
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                return await GetConversationsForUserAsync(userId, cancellationToken);
+            }
+
+            var cleanQuery = query.Trim();
+
+            var list = await _conversationRepository.GetQueryable()
+                .AsNoTracking()
+                .Where(c => c.UserId == userId && 
+                    (EF.Functions.Like(c.Title, $"%{cleanQuery}%") || 
+                     c.Messages.Any(m => EF.Functions.Like(m.Content, $"%{cleanQuery}%"))))
+                .OrderByDescending(c => c.IsPinned)
+                .ThenByDescending(c => c.PinnedAt)
+                .ThenByDescending(c => c.CreatedAt)
+                .Select(c => new ConversationResponse
+                {
+                    Id = c.Id,
+                    UserId = c.UserId,
+                    Title = c.Title,
+                    SelectedModel = c.SelectedModel,
+                    IsPinned = c.IsPinned,
+                    PinnedAt = c.PinnedAt,
+                    CreatedAt = c.CreatedAt,
+                    UpdatedAt = c.UpdatedAt
+                })
+                .ToListAsync(cancellationToken);
+
+            return list;
+        }
+
         public async Task<ChatResponse> ProcessSendMessageAsync(
             int userId, 
             int conversationId, 

@@ -36,6 +36,8 @@ interface ChatContextType {
   setSelectedModel: (model: string) => void;
   availableModels: AIModel[];
   searchStatus: string | null;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -52,6 +54,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [selectedModel, setSelectedModel] = useState<string>('llama-3.1-8b-instant');
   const [availableModels, setAvailableModels] = useState<AIModel[]>(AI_MODELS);
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Store activeConversationId in a ref to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
@@ -175,6 +178,30 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(JSON.parse(savedUser));
     }
   }, []);
+
+  // Debounced search effect
+  useEffect(() => {
+    if (!token) return;
+
+    if (searchQuery.trim() === '') {
+      loadConversations();
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const response = await apiClient.get<Conversation[]>(
+          `/conversations/search?query=${encodeURIComponent(searchQuery.trim())}`
+        );
+        setConversations(sortConversationsList(response.data));
+      } catch (error) {
+        console.error('Failed to search conversations', error);
+        showToast('Search failed', 'error');
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery, token]);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now();
@@ -372,6 +399,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSelectedModel,
         availableModels,
         searchStatus,
+        searchQuery,
+        setSearchQuery,
       }}
     >
       {children}

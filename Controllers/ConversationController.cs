@@ -52,6 +52,14 @@ namespace AIChatBot.Controllers
             return Ok(list);
         }
 
+        [HttpGet("search")]
+        public async Task<IActionResult> Search([FromQuery] string query, CancellationToken cancellationToken)
+        {
+            var userId = GetCurrentUserId();
+            var list = await _conversationService.SearchConversationsAsync(userId, query, cancellationToken);
+            return Ok(list);
+        }
+
         [HttpGet("{conversationId:int}")]
         public async Task<IActionResult> GetById(int conversationId, CancellationToken cancellationToken)
         {

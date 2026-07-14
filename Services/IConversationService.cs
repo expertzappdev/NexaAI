@@ -38,6 +38,11 @@ namespace AIChatBot.Services
             bool isPinned, 
             CancellationToken cancellationToken = default);
 
+        Task<IEnumerable<ConversationResponse>> SearchConversationsAsync(
+            int userId, 
+            string query, 
+            CancellationToken cancellationToken = default);
+
         Task<ChatResponse> ProcessSendMessageAsync(
             int userId, 
             int conversationId, 
