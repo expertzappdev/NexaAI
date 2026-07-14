@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Copy, Check, Brain, ChevronDown, ChevronUp } from 'lucide-react';
+import { User, Copy, Check, Brain, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import type { Message } from '../types';
 import MarkdownRenderer from './MarkdownRenderer';
+import { useChat } from '../store/ChatContext';
 
 interface MessageBubbleProps {
   message: Message;
@@ -12,6 +13,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
+  const { regeneratingMessageId, regenerateResponse, searchStatus } = useChat();
+
+  const isCurrentlyRegenerating = regeneratingMessageId === message.id;
 
   const handleCopy = async () => {
     try {
@@ -84,18 +88,39 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             ? 'bg-gradient-to-tr from-blue-600 to-purple-600 border-indigo-500/25 text-white rounded-tr-none shadow-purple-600/5' 
             : 'bg-zinc-900/40 backdrop-blur-md border-zinc-800/80 text-zinc-150 rounded-tl-none'
         }`}>
-          {/* Copy Button (visible on hover) */}
-          <button
-            onClick={handleCopy}
-            className={`absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-800 transition-all text-zinc-400 hover:text-zinc-200 focus:outline-none focus:opacity-100 ${
-              isUser ? 'text-zinc-200 hover:text-white bg-indigo-900/60 hover:bg-indigo-900' : ''
-            }`}
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-          </button>
+          {/* Copy Button for User Message (visible on hover) */}
+          {isUser && (
+            <button
+              onClick={handleCopy}
+              className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-indigo-900/60 hover:bg-indigo-900 transition-all text-zinc-200 hover:text-white focus:outline-none focus:opacity-100"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          )}
+
+          {/* Action Toolbar for AI Message (visible on hover) */}
+          {!isUser && (
+            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 flex items-center space-x-1.5 transition-all focus-within:opacity-100">
+              <button
+                onClick={handleCopy}
+                className="p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-800 transition-all text-zinc-400 hover:text-zinc-200 focus:outline-none"
+                title="Copy response"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                onClick={() => regenerateResponse(message.id)}
+                disabled={regeneratingMessageId !== null}
+                className="p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-800 transition-all text-zinc-400 hover:text-zinc-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Regenerate response"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isCurrentlyRegenerating ? 'animate-spin text-indigo-400' : ''}`} />
+              </button>
+            </div>
+          )}
 
           {/* Thinking Block Section */}
-          {!isUser && thinking && (
+          {!isUser && thinking && !isCurrentlyRegenerating && (
             <div className="mb-3.5 border-b border-zinc-800/80 pb-3">
               <button
                 onClick={() => setShowThinking(!showThinking)}
@@ -122,6 +147,23 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           {/* Text Content */}
           {isUser ? (
             <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+          ) : isCurrentlyRegenerating ? (
+            <div className="flex items-center space-x-2.5 py-2">
+              <span className="text-xs text-zinc-450 font-medium">
+                {searchStatus ? (
+                  <span className="flex items-center gap-1.5 text-blue-400">
+                    🌐 {searchStatus}
+                  </span>
+                ) : (
+                  'Regenerating response'
+                )}
+              </span>
+              <div className="flex space-x-1 items-center h-2">
+                <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full dot-anim"></span>
+                <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full dot-anim"></span>
+                <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full dot-anim"></span>
+              </div>
+            </div>
           ) : (
             cleanContent && <MarkdownRenderer content={cleanContent} />
           )}

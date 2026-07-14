@@ -14,7 +14,8 @@ class SignalrService {
     onTypingStopped: () => void,
     onErrorMessage: (error: string) => void,
     onConnectionChange: (connected: boolean) => void,
-    onSearchStatus?: (status: string) => void
+    onSearchStatus?: (status: string) => void,
+    onRegenerateComplete?: (payload: { messageId: number; content: string; model: string; totalTokens: number }) => void
   ): Promise<void> {
     if (this.connection) {
       if (this.connection.state === HubConnectionState.Connected) {
@@ -66,6 +67,12 @@ class SignalrService {
       }
     });
 
+    this.connection.on('RegenerateComplete', (payload) => {
+      if (onRegenerateComplete) {
+        onRegenerateComplete(payload);
+      }
+    });
+
     this.connection.onreconnecting((error) => {
       console.warn('SignalR reconnecting due to error:', error);
       if (this.onConnectionChangeCallback) this.onConnectionChangeCallback(false);
@@ -112,6 +119,13 @@ class SignalrService {
       throw new Error('Cannot send message. SignalR is not connected.');
     }
     await this.connection.invoke('SendMessage', conversationId, message, model);
+  }
+
+  public async regenerateResponse(messageId: number, model: string): Promise<void> {
+    if (!this.connection || this.connection.state !== HubConnectionState.Connected) {
+      throw new Error('Cannot regenerate. SignalR is not connected.');
+    }
+    await this.connection.invoke('RegenerateResponse', messageId, model);
   }
 
   public isConnected(): boolean {

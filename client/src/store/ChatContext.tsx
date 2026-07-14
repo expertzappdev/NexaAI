@@ -42,6 +42,8 @@ interface ChatContextType {
   loadArchivedConversations: () => Promise<void>;
   archiveConversation: (id: number) => Promise<boolean>;
   restoreConversation: (id: number) => Promise<boolean>;
+  regeneratingMessageId: number | null;
+  regenerateResponse: (messageId: number) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -60,6 +62,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
+  const [regeneratingMessageId, setRegeneratingMessageId] = useState<number | null>(null);
 
   // Store activeConversationId in a ref to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
@@ -104,10 +107,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         () => {
           setIsLoading(false);
           setSearchStatus(null);
+          setRegeneratingMessageId(null);
         },
         (errorMsg) => {
           showToast(errorMsg, 'error');
           setSearchStatus(null);
+          setRegeneratingMessageId(null);
           // Append error message to screen
           const currentId = activeConversationIdRef.current;
           if (currentId) {
@@ -128,6 +133,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         (status) => {
           setSearchStatus(status);
+        },
+        (payload) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === payload.messageId
+                ? { ...m, content: payload.content, model: payload.model, totalTokens: payload.totalTokens }
+                : m
+            )
+          );
+          setRegeneratingMessageId(null);
         }
       ).catch((err) => {
         console.error('SignalR init connection failure:', err);
@@ -439,6 +454,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const regenerateResponse = async (messageId: number) => {
+    if (regeneratingMessageId !== null) return;
+    setRegeneratingMessageId(messageId);
+    try {
+      await socketService.regenerateResponse(messageId, selectedModel);
+    } catch (error) {
+      console.error('Failed to regenerate response via SignalR', error);
+      showToast('Failed to regenerate response.', 'error');
+      setRegeneratingMessageId(null);
+    }
+  };
+
   const clearMessages = () => {
     setMessages([]);
     setActiveConversationId(null);
@@ -475,6 +502,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loadArchivedConversations,
         archiveConversation,
         restoreConversation,
+        regeneratingMessageId,
+        regenerateResponse,
       }}
     >
       {children}

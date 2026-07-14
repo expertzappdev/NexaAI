@@ -502,5 +502,169 @@ namespace AIChatBot.Services
                 TotalTokens = totalTokens
             };
         }
+
+        public async Task<ChatResponse> RegenerateResponseAsync(
+            int userId,
+            int messageId,
+            string currentModel,
+            Func<string, Task>? onStatusUpdate = null,
+            CancellationToken cancellationToken = default)
+        {
+            // 1. Fetch assistant message
+            var assistantMsg = await _messageRepository.GetQueryable()
+                .Include(m => m.Conversation)
+                .ThenInclude(c => c.Messages)
+                .FirstOrDefaultAsync(m => m.Id == messageId, cancellationToken);
+
+            if (assistantMsg == null)
+            {
+                throw new KeyNotFoundException($"Message with ID {messageId} was not found.");
+            }
+
+            if (assistantMsg.Role != "assistant")
+            {
+                throw new InvalidOperationException("Only assistant messages can be regenerated.");
+            }
+
+            var conversation = assistantMsg.Conversation;
+            if (conversation.UserId != userId)
+            {
+                throw new UnauthorizedAccessException("You are not authorized to regenerate messages in this conversation.");
+            }
+
+            // 2. Identify prompt and history up to this message
+            var orderedMessages = conversation.Messages.OrderBy(m => m.CreatedAt).ToList();
+            var targetIndex = orderedMessages.FindIndex(m => m.Id == messageId);
+            if (targetIndex <= 0)
+            {
+                throw new InvalidOperationException("Could not find the prompt preceding this assistant message.");
+            }
+
+            var userPromptMsg = orderedMessages[targetIndex - 1];
+            if (userPromptMsg.Role != "user")
+            {
+                throw new InvalidOperationException("The message preceding the assistant response is not a user prompt.");
+            }
+
+            var historyMessages = orderedMessages.Take(targetIndex - 1).ToList();
+
+            // 3. Web Search Preservation Logic
+            bool requiresSearch = false;
+            string searchReason = "";
+            string finalModel = currentModel;
+
+            // Check if current model is web search or if the message previously used web search
+            bool previouslyUsedSearch = assistantMsg.Model != null && 
+                (assistantMsg.Model.Contains("Search", StringComparison.OrdinalIgnoreCase));
+
+            if (currentModel == "nexa-web-search" || previouslyUsedSearch)
+            {
+                requiresSearch = true;
+                searchReason = "Web search was selected or previously used for this response.";
+                if (currentModel == "nexa-web-search")
+                {
+                    finalModel = "llama-3.3-70b-versatile";
+                }
+            }
+            else
+            {
+                // Otherwise check decision service on prompt
+                if (onStatusUpdate != null)
+                {
+                    await onStatusUpdate("Analyzing query...");
+                }
+                var decision = await _webSearchDecisionService.DecideAsync(userPromptMsg.Content, cancellationToken);
+                requiresSearch = decision.RequiresSearch;
+                searchReason = decision.Reason;
+            }
+
+            string searchResults = "";
+            if (requiresSearch)
+            {
+                if (onStatusUpdate != null)
+                {
+                    await onStatusUpdate("Searching the web...");
+                }
+                searchResults = await _tavilyService.SearchAsync(userPromptMsg.Content, cancellationToken);
+            }
+
+            // 4. Build Chat History
+            var chatHistory = new List<GroqMessage>();
+
+            // Add system prompt if not present
+            bool hasSystemMessage = historyMessages.Any(m => m.Role.Equals("system", StringComparison.OrdinalIgnoreCase));
+            if (!hasSystemMessage)
+            {
+                chatHistory.Add(new GroqMessage
+                {
+                    Role = "system",
+                    Content = "You are Nexa AI assistant"
+                });
+            }
+
+            // Map history messages
+            foreach (var dbMsg in historyMessages)
+            {
+                chatHistory.Add(new GroqMessage
+                {
+                    Role = dbMsg.Role,
+                    Content = dbMsg.Content
+                });
+            }
+
+            // Append search results if needed
+            if (requiresSearch && !string.IsNullOrWhiteSpace(searchResults))
+            {
+                chatHistory.Add(new GroqMessage
+                {
+                    Role = "system",
+                    Content = $"The following web search information was retrieved for the query:\n{searchResults}\nAnswer the user using this updated information."
+                });
+            }
+
+            // Append target user prompt
+            chatHistory.Add(new GroqMessage
+            {
+                Role = "user",
+                Content = userPromptMsg.Content
+            });
+
+            // 5. Call Groq
+            var groqResponse = await _groqService.SendMessageAsync(chatHistory, finalModel, cancellationToken);
+
+            // 6. Extract results
+            var assistantContent = groqResponse.Choices[0].Message.Content;
+            var promptTokens = groqResponse.Usage?.PromptTokens;
+            var completionTokens = groqResponse.Usage?.CompletionTokens;
+            var totalTokens = groqResponse.Usage?.TotalTokens;
+
+            var modelUsed = groqResponse.Model;
+            if (requiresSearch)
+            {
+                modelUsed += " + Search";
+            }
+
+            // 7. Update database record to replace old response
+            assistantMsg.Content = assistantContent;
+            assistantMsg.PromptTokens = promptTokens;
+            assistantMsg.CompletionTokens = completionTokens;
+            assistantMsg.TotalTokens = totalTokens;
+            assistantMsg.Model = modelUsed;
+
+            _messageRepository.Update(assistantMsg);
+            
+            conversation.UpdatedAt = DateTime.UtcNow;
+            _conversationRepository.Update(conversation);
+
+            await _conversationRepository.SaveChangesAsync(cancellationToken);
+
+            return new ChatResponse
+            {
+                Success = true,
+                Message = assistantContent,
+                Model = modelUsed,
+                TotalTokens = totalTokens
+            };
+        }
     }
 }

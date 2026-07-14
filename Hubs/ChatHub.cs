@@ -108,5 +108,70 @@ namespace AIChatBot.Hubs
                 await Clients.Caller.SendAsync("TypingStopped");
             }
         }
+
+        public async Task RegenerateResponse(int messageId, string model)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(model))
+                {
+                    model = "llama-3.1-8b-instant";
+                }
+
+                var allowedModels = new System.Collections.Generic.HashSet<string>
+                {
+                    "llama-3.1-8b-instant",
+                    "llama-3.3-70b-versatile",
+                    "qwen/qwen3.6-27b",
+                    "qwen/qwen3-32b",
+                    "groq/compound-mini",
+                    "nexa-web-search"
+                };
+
+                if (!allowedModels.Contains(model))
+                {
+                    await Clients.Caller.SendAsync("ErrorMessage", "Invalid model selected.");
+                    return;
+                }
+
+                var userId = GetCurrentUserId();
+
+                // Notify client that typing/processing has started
+                await Clients.Caller.SendAsync("TypingStarted");
+
+                // Regenerate response
+                var chatResponse = await _conversationService.RegenerateResponseAsync(
+                    userId,
+                    messageId,
+                    model,
+                    async (status) =>
+                    {
+                        await Clients.Caller.SendAsync("SearchStatus", status);
+                    },
+                    Context.ConnectionAborted);
+
+                // Send regenerated response details back to client
+                await Clients.Caller.SendAsync("RegenerateComplete", new
+                {
+                    messageId = messageId,
+                    content = chatResponse.Message,
+                    model = chatResponse.Model,
+                    totalTokens = chatResponse.TotalTokens
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                await Clients.Caller.SendAsync("ErrorMessage", "You are not authorized: " + ex.Message);
+            }
+            catch (Exception ex)
+            {
+                await Clients.Caller.SendAsync("ErrorMessage", "Failed to regenerate response: " + ex.Message);
+            }
+            finally
+            {
+                // Ensure typing stopped is always triggered
+                await Clients.Caller.SendAsync("TypingStopped");
+            }
+        }
     }
 }
