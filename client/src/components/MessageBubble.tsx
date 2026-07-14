@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { User, Copy, Check, Brain, ChevronDown, ChevronUp } from 'lucide-react';
 import type { Message } from '../types';
 import MarkdownRenderer from './MarkdownRenderer';
+import { useChat } from '../store/ChatContext';
 
 interface MessageBubbleProps {
   message: Message;
@@ -12,11 +13,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
+  const { showToast } = useChat();
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(message.content);
       setCopied(true);
+      showToast('Copied to clipboard', 'success');
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy message content: ', err);
