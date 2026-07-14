@@ -133,12 +133,24 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             <span>{formatTime(message.createdAt)}</span>
             
             {/* Display Token and Model info for AI assistant response */}
-            {!isUser && message.model && (
-              <>
-                <span>•</span>
-                <span className="font-mono bg-zinc-800/60 border border-zinc-850 px-1 py-0.5 rounded text-[8px] tracking-tight">{message.model}</span>
-              </>
-            )}
+            {!isUser && message.model && (() => {
+              const isSearchUsed = message.model.toLowerCase().includes('search') || message.model.toLowerCase().includes('+');
+              const displayModel = message.model.replace(/\s*\+\s*Search/i, '').replace(/nexa-web-search/i, 'Nexa Search');
+              return (
+                <>
+                  {isSearchUsed && (
+                    <>
+                      <span>•</span>
+                      <span className="flex items-center gap-1 font-sans text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wide uppercase">
+                        🌐 Web results used
+                      </span>
+                    </>
+                  )}
+                  <span>•</span>
+                  <span className="font-mono bg-zinc-800/60 border border-zinc-850 px-1 py-0.5 rounded text-[8px] tracking-tight">{displayModel}</span>
+                </>
+              );
+            })()}
             {!isUser && message.totalTokens && (
               <>
                 <span>•</span>

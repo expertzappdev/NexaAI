@@ -33,6 +33,8 @@ const ModelSelector: React.FC = () => {
         return '🧠 Qwen Think';
       case 'groq/compound-mini':
         return '🤖 Compound Mini';
+      case 'nexa-web-search':
+        return '🌐 Nexa Search';
       default:
         return `${model.icon || '🤖'} ${model.name}`;
     }
@@ -44,6 +46,7 @@ const ModelSelector: React.FC = () => {
     if (catLower.includes('pro')) return 'bg-amber-500/10 text-amber-400 border-amber-500/25';
     if (catLower.includes('code')) return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25';
     if (catLower.includes('think')) return 'bg-purple-500/10 text-purple-400 border-purple-500/25';
+    if (catLower.includes('search')) return 'bg-blue-500/10 text-blue-400 border-blue-500/25';
     return 'bg-zinc-500/10 text-zinc-400 border-zinc-500/25';
   };
 

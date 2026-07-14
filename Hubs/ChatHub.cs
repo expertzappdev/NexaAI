@@ -49,7 +49,8 @@ namespace AIChatBot.Hubs
                     "llama-3.3-70b-versatile",
                     "qwen/qwen3.6-27b",
                     "qwen/qwen3-32b",
-                    "groq/compound-mini"
+                    "groq/compound-mini",
+                    "nexa-web-search"
                 };
 
                 if (!allowedModels.Contains(model))
@@ -77,6 +78,10 @@ namespace AIChatBot.Hubs
                     conversationId,
                     message,
                     model,
+                    async (status) =>
+                    {
+                        await Clients.Caller.SendAsync("SearchStatus", status);
+                    },
                     Context.ConnectionAborted);
 
                 // Send assistant response back to client
@@ -84,7 +89,9 @@ namespace AIChatBot.Hubs
                 {
                     role = "assistant",
                     content = chatResponse.Message,
-                    createdAt = DateTime.UtcNow
+                    createdAt = DateTime.UtcNow,
+                    model = chatResponse.Model,
+                    totalTokens = chatResponse.TotalTokens
                 });
             }
             catch (UnauthorizedAccessException ex)

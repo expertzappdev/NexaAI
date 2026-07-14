@@ -34,6 +34,7 @@ interface ChatContextType {
   selectedModel: string;
   setSelectedModel: (model: string) => void;
   availableModels: AIModel[];
+  searchStatus: string | null;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -49,6 +50,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [socketConnected, setSocketConnected] = useState<boolean>(false);
   const [selectedModel, setSelectedModel] = useState<string>('llama-3.1-8b-instant');
   const [availableModels, setAvailableModels] = useState<AIModel[]>(AI_MODELS);
+  const [searchStatus, setSearchStatus] = useState<string | null>(null);
 
   // Store activeConversationId in a ref to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
@@ -73,8 +75,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: msg.role as 'system' | 'user' | 'assistant',
               content: msg.content,
               createdAt: msg.createdAt,
+              model: msg.model,
+              totalTokens: msg.totalTokens,
             },
           ]);
+
+          setSearchStatus(null); // Clear search status when message is received
 
           // Touch update time of conversation in list
           if (currentId) {
@@ -88,9 +94,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         () => {
           setIsLoading(false);
+          setSearchStatus(null);
         },
         (errorMsg) => {
           showToast(errorMsg, 'error');
+          setSearchStatus(null);
           // Append error message to screen
           const currentId = activeConversationIdRef.current;
           if (currentId) {
@@ -108,6 +116,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         (connected) => {
           setSocketConnected(connected);
+        },
+        (status) => {
+          setSearchStatus(status);
         }
       ).catch((err) => {
         console.error('SignalR init connection failure:', err);
@@ -325,6 +336,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         selectedModel,
         setSelectedModel,
         availableModels,
+        searchStatus,
       }}
     >
       {children}

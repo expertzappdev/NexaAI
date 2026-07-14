@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, Bell, Clock } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { useChat } from '../store/ChatContext';
 
 interface NavbarProps {
@@ -34,14 +34,8 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
         )}
       </div>
 
-      {/* Top Right Minimal Notification and History Icons */}
+      {/* Top Right Minimal Icons Area (Removed Notifications & History) */}
       <div className="flex items-center space-x-3.5">
-        <button className="text-zinc-400 hover:text-zinc-200 p-1.5 rounded-lg hover:bg-zinc-900/40 transition-colors focus:outline-none">
-          <Bell className="w-4.5 h-4.5" />
-        </button>
-        <button className="text-zinc-400 hover:text-zinc-200 p-1.5 rounded-lg hover:bg-zinc-900/40 transition-colors focus:outline-none">
-          <Clock className="w-4.5 h-4.5" />
-        </button>
       </div>
     </header>
   );

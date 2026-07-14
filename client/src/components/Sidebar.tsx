@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { LogOut, Plus, X, Home, Folder, BarChart3, Settings, HelpCircle } from 'lucide-react';
+import React from 'react';
+import { LogOut, Plus, X } from 'lucide-react';
 import { useChat } from '../store/ChatContext';
 import ConversationItem from './ConversationItem';
 
@@ -10,19 +10,11 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { conversations, createConversation, user, logout } = useChat();
-  const [activeTab, setActiveTab] = useState<'home' | 'projects' | 'analytics' | 'settings'>('home');
 
   const handleNewChat = async () => {
     await createConversation("New Chat");
     onClose(); // close drawer on mobile if open
   };
-
-  const navItems = [
-    { id: 'home', label: 'Home', icon: Home },
-    { id: 'projects', label: 'Projects', icon: Folder },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'settings', label: 'Settings', icon: Settings },
-  ] as const;
 
   return (
     <>
@@ -68,28 +60,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Premium Linear/Vercel Style Navigation Menu */}
-        <nav className="px-3 space-y-1 py-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all focus:outline-none ${
-                  isActive
-                    ? 'bg-zinc-900 text-white border-l-2 border-blue-500 shadow-inner'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
-                }`}
-              >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-blue-400' : 'text-zinc-500'}`} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
         {/* Conversation List / History */}
         <div className="flex-grow overflow-y-auto px-3 border-t border-zinc-900/50 mt-2 pt-2">
           <div className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
@@ -108,14 +78,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Footer Layout: Support + Logout + User Badge */}
+        {/* Footer Layout: Logout + User Badge */}
         <div className="p-4 border-t border-zinc-900 bg-zinc-950/80 space-y-3">
-          {/* Support Link */}
-          <button className="w-full flex items-center space-x-3 px-3 py-2.5 text-zinc-400 hover:text-zinc-200 transition-colors text-sm font-medium focus:outline-none">
-            <HelpCircle className="w-4.5 h-4.5 text-zinc-500" />
-            <span>Support</span>
-          </button>
-
           {/* Logout Trigger */}
           <button
             onClick={logout}

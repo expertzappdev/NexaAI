@@ -36,6 +36,13 @@ packages/
 project.lock.json
 project.assets.json
 
+# impeccable Agents
+
+.agents/
+.cursor/
+.gemini/
+.codex/
+
 # Entity Framework
 *.db
 *.sqlite

@@ -17,11 +17,12 @@ var builder = WebApplication.CreateBuilder(args);
 // Add configurations
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 builder.Services.Configure<GroqSettings>(builder.Configuration.GetSection("Groq"));
+builder.Services.Configure<TavilySettings>(builder.Configuration.GetSection("Tavily"));
 
 // Add database context
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? Environment.GetEnvironmentVariable("MYSQL_URL")
-    ?? Environment.GetEnvironmentVariable("DATABASE_URL");
+var connectionString = Environment.GetEnvironmentVariable("MYSQL_URL")
+    ?? Environment.GetEnvironmentVariable("DATABASE_URL")
+    ?? builder.Configuration.GetConnectionString("DefaultConnection");
 
 if (string.IsNullOrEmpty(connectionString))
 {
@@ -41,7 +42,7 @@ if (connectionString.StartsWith("mysql://", StringComparison.OrdinalIgnoreCase))
         var port = uri.Port > 0 ? uri.Port : 3306;
         var database = uri.AbsolutePath.TrimStart('/');
         
-        connectionString = $"Server={host};Port={port};Database={database};Uid={username};Pwd={password};SSL Mode=None;";
+        connectionString = $"Server={host};Port={port};Database={database};Uid={username};Pwd={password};SslMode=Preferred;";
     }
     catch (Exception ex)
     {
@@ -61,9 +62,16 @@ builder.Services.AddHttpClient("GroqClient", (sp, client) =>
     var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<GroqSettings>>().Value;
     client.BaseAddress = new Uri(settings.BaseUrl);
 });
+builder.Services.AddHttpClient("TavilyClient", (sp, client) =>
+{
+    var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TavilySettings>>().Value;
+    client.BaseAddress = new Uri(settings.BaseUrl);
+});
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<IConversationService, ConversationService>();
 builder.Services.AddScoped<IGroqService, GroqService>();
+builder.Services.AddScoped<ITavilyService, TavilyService>();
+builder.Services.AddScoped<IWebSearchDecisionService, WebSearchDecisionService>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 

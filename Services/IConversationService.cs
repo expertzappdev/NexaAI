@@ -37,6 +37,7 @@ namespace AIChatBot.Services
             int conversationId, 
             string content, 
             string model,
+            System.Func<string, System.Threading.Tasks.Task>? onStatusUpdate = null,
             CancellationToken cancellationToken = default);
     }
 }
