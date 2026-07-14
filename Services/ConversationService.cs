@@ -549,12 +549,12 @@ namespace AIChatBot.Services
             // 1. Fetch assistant message
             var assistantMsg = await _messageRepository.GetQueryable()
                 .Include(m => m.Conversation)
-                .ThenInclude(c => c.Messages)
+                .ThenInclude(c => c.Messages!)
                 .FirstOrDefaultAsync(m => m.Id == messageId, cancellationToken);
 
-            if (assistantMsg == null)
+            if (assistantMsg == null || assistantMsg.Conversation == null)
             {
-                throw new KeyNotFoundException($"Message with ID {messageId} was not found.");
+                throw new KeyNotFoundException($"Message with ID {messageId} was not found or has no conversation.");
             }
 
             if (assistantMsg.Role != "assistant")
@@ -747,12 +747,12 @@ namespace AIChatBot.Services
             // 1. Fetch user message and verify ownership
             var userMessage = await _messageRepository.GetQueryable()
                 .Include(m => m.Conversation)
-                .ThenInclude(c => c.Messages)
+                .ThenInclude(c => c.Messages!)
                 .FirstOrDefaultAsync(m => m.Id == messageId, cancellationToken);
 
-            if (userMessage == null)
+            if (userMessage == null || userMessage.Conversation == null)
             {
-                throw new KeyNotFoundException($"Message with ID {messageId} was not found.");
+                throw new KeyNotFoundException($"Message with ID {messageId} was not found or has no conversation.");
             }
 
             if (userMessage.Role != "user")

@@ -258,7 +258,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         (payload) => {
           setMessages((prev) => {
-            const placeholderIdx = prev.findIndex((m) => m.id === 999999);
             const idx = prev.findIndex((m) => m.id === payload.editedMessageId);
             if (idx === -1) return prev;
             

@@ -94,7 +94,7 @@ namespace AIChatBot.Services
                     using var reader = new System.IO.StreamReader(stream);
                     string? line;
                     var fullContent = new StringBuilder();
-                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var streamOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                     string lastChoiceId = Guid.NewGuid().ToString();
 
                     while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
@@ -108,7 +108,7 @@ namespace AIChatBot.Services
 
                             try
                             {
-                                var chunk = JsonSerializer.Deserialize<GroqStreamChunk>(data, options);
+                                var chunk = JsonSerializer.Deserialize<GroqStreamChunk>(data, streamOptions);
                                 if (chunk != null)
                                 {
                                     if (!string.IsNullOrEmpty(chunk.Id))
@@ -164,21 +164,21 @@ namespace AIChatBot.Services
                     _logger.LogError("Groq API returned error. Status: {Status}. Body: {Body}", 
                         responseNormal.StatusCode, responseBodyNormal);
 
-                    if (response.StatusCode == HttpStatusCode.Unauthorized)
+                    if (responseNormal.StatusCode == HttpStatusCode.Unauthorized)
                     {
                         throw new UnauthorizedAccessException("Groq API key is invalid or unauthorized.");
                     }
 
-                    if ((int)response.StatusCode == 429)
+                    if ((int)responseNormal.StatusCode == 429)
                     {
                         throw new HttpRequestException("Groq API rate limit exceeded.", null, HttpStatusCode.TooManyRequests);
                     }
 
-                    throw new HttpRequestException($"Groq API request failed with status code {response.StatusCode}.", null, response.StatusCode);
+                    throw new HttpRequestException($"Groq API request failed with status code {responseNormal.StatusCode}.", null, responseNormal.StatusCode);
                 }
 
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var result = JsonSerializer.Deserialize<GroqResponse>(responseBody, options);
+                var normalOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var result = JsonSerializer.Deserialize<GroqResponse>(responseBodyNormal, normalOptions);
 
                 if (result == null || result.Choices == null || result.Choices.Count == 0)
                 {
@@ -199,6 +199,14 @@ namespace AIChatBot.Services
                 _logger.LogError(ex, "An unexpected error occurred while communicating with Groq.");
                 throw;
             }
+        }
+
+        public Task<GroqResponse> SendMessageAsync(
+            List<GroqMessage> chatHistory,
+            string? modelOverride,
+            CancellationToken cancellationToken)
+        {
+            return SendMessageAsync(chatHistory, modelOverride, null, cancellationToken);
         }
     }
 }

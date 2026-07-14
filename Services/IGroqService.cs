@@ -97,5 +97,10 @@ namespace AIChatBot.Services
             string? modelOverride = null,
             Action<string>? onChunkReceived = null,
             CancellationToken cancellationToken = default);
+
+        Task<GroqResponse> SendMessageAsync(
+            List<GroqMessage> chatHistory,
+            string? modelOverride,
+            CancellationToken cancellationToken);
     }
 }
