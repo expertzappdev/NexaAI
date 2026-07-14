@@ -29,6 +29,8 @@ export interface Message {
   model?: string;
   isEdited?: boolean;
   editedAt?: string;
+  isStopped?: boolean;
+  isStreaming?: boolean;
   createdAt: string;
 }
 
@@ -48,4 +50,6 @@ export interface ChatResponse {
   message: string;
   model?: string;
   totalTokens?: number;
+  isStopped?: boolean;
+  messageId?: number;
 }

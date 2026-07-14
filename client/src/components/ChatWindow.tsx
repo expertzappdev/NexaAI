@@ -6,7 +6,7 @@ import EmptyState from './EmptyState';
 import TypingIndicator from './TypingIndicator';
 
 const ChatWindow: React.FC = () => {
-  const { messages, isLoading } = useChat();
+  const { messages, isLoading, regeneratingMessageId } = useChat();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto scroll to bottom on message updates
@@ -27,7 +27,7 @@ const ChatWindow: React.FC = () => {
             ))}
 
             {/* AI thinking state */}
-            {isLoading && (
+            {isLoading && !messages.some(m => (m.isStreaming && m.content.length > 0) || m.id === regeneratingMessageId) && (
               <TypingIndicator />
             )}
 

@@ -102,6 +102,11 @@ namespace AIChatBot.Migrations
                         .HasColumnType("tinyint(1)")
                         .HasDefaultValue(false);
 
+                    b.Property<bool>("IsStopped")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Model")
                         .HasMaxLength(150)
                         .HasColumnType("varchar(150)");

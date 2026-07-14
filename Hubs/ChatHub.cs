@@ -1,6 +1,8 @@
 using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using System.Collections.Concurrent;
+using System.Threading;
 using AIChatBot.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -11,6 +13,8 @@ namespace AIChatBot.Hubs
     public class ChatHub : Hub
     {
         private readonly IConversationService _conversationService;
+        private static readonly ConcurrentDictionary<string, CancellationTokenSource> _activeRequests = 
+            new ConcurrentDictionary<string, CancellationTokenSource>();
 
         public ChatHub(IConversationService conversationService)
         {
@@ -27,8 +31,28 @@ namespace AIChatBot.Hubs
             return userId;
         }
 
+        public Task StopGenerating()
+        {
+            if (_activeRequests.TryGetValue(Context.ConnectionId, out var cts))
+            {
+                try
+                {
+                    cts.Cancel();
+                }
+                catch (Exception)
+                {
+                    // Ignore transient exceptions on cancel
+                }
+            }
+            return Task.CompletedTask;
+        }
+
         public async Task SendMessage(int conversationId, string message, string model)
         {
+            var cts = new CancellationTokenSource();
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, Context.ConnectionAborted);
+            _activeRequests[Context.ConnectionId] = cts;
+
             try
             {
                 if (string.IsNullOrWhiteSpace(message))
@@ -82,16 +106,22 @@ namespace AIChatBot.Hubs
                     {
                         await Clients.Caller.SendAsync("SearchStatus", status);
                     },
-                    Context.ConnectionAborted);
+                    async (chunk) =>
+                    {
+                        await Clients.Caller.SendAsync("ReceiveChunk", chunk);
+                    },
+                    linkedCts.Token);
 
                 // Send assistant response back to client
                 await Clients.Caller.SendAsync("ReceiveMessage", new
                 {
+                    id = chatResponse.MessageId,
                     role = "assistant",
                     content = chatResponse.Message,
                     createdAt = DateTime.UtcNow,
                     model = chatResponse.Model,
-                    totalTokens = chatResponse.TotalTokens
+                    totalTokens = chatResponse.TotalTokens,
+                    isStopped = chatResponse.IsStopped
                 });
             }
             catch (UnauthorizedAccessException ex)
@@ -104,6 +134,8 @@ namespace AIChatBot.Hubs
             }
             finally
             {
+                _activeRequests.TryRemove(Context.ConnectionId, out _);
+                cts.Dispose();
                 // Ensure typing stopped is always triggered even on errors
                 await Clients.Caller.SendAsync("TypingStopped");
             }
@@ -111,6 +143,10 @@ namespace AIChatBot.Hubs
 
         public async Task RegenerateResponse(int messageId, string model)
         {
+            var cts = new CancellationTokenSource();
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, Context.ConnectionAborted);
+            _activeRequests[Context.ConnectionId] = cts;
+
             try
             {
                 if (string.IsNullOrWhiteSpace(model))
@@ -148,7 +184,11 @@ namespace AIChatBot.Hubs
                     {
                         await Clients.Caller.SendAsync("SearchStatus", status);
                     },
-                    Context.ConnectionAborted);
+                    async (chunk) =>
+                    {
+                        await Clients.Caller.SendAsync("ReceiveChunk", chunk);
+                    },
+                    linkedCts.Token);
 
                 // Send regenerated response details back to client
                 await Clients.Caller.SendAsync("RegenerateComplete", new
@@ -156,7 +196,8 @@ namespace AIChatBot.Hubs
                     messageId = messageId,
                     content = chatResponse.Message,
                     model = chatResponse.Model,
-                    totalTokens = chatResponse.TotalTokens
+                    totalTokens = chatResponse.TotalTokens,
+                    isStopped = chatResponse.IsStopped
                 });
             }
             catch (UnauthorizedAccessException ex)
@@ -169,6 +210,8 @@ namespace AIChatBot.Hubs
             }
             finally
             {
+                _activeRequests.TryRemove(Context.ConnectionId, out _);
+                cts.Dispose();
                 // Ensure typing stopped is always triggered
                 await Clients.Caller.SendAsync("TypingStopped");
             }
@@ -176,6 +219,10 @@ namespace AIChatBot.Hubs
 
         public async Task EditMessage(int messageId, string newContent, string model)
         {
+            var cts = new CancellationTokenSource();
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, Context.ConnectionAborted);
+            _activeRequests[Context.ConnectionId] = cts;
+
             try
             {
                 if (string.IsNullOrWhiteSpace(newContent))
@@ -220,7 +267,11 @@ namespace AIChatBot.Hubs
                     {
                         await Clients.Caller.SendAsync("SearchStatus", status);
                     },
-                    Context.ConnectionAborted);
+                    async (chunk) =>
+                    {
+                        await Clients.Caller.SendAsync("ReceiveChunk", chunk);
+                    },
+                    linkedCts.Token);
 
                 // Broadcast the updated conversation state
                 await Clients.Caller.SendAsync("EditMessageComplete", new
@@ -230,11 +281,13 @@ namespace AIChatBot.Hubs
                     editedAt = DateTime.UtcNow,
                     assistantResponse = new
                     {
+                        id = chatResponse.MessageId,
                         role = "assistant",
                         content = chatResponse.Message,
                         createdAt = DateTime.UtcNow,
                         model = chatResponse.Model,
-                        totalTokens = chatResponse.TotalTokens
+                        totalTokens = chatResponse.TotalTokens,
+                        isStopped = chatResponse.IsStopped
                     }
                 });
             }
@@ -248,6 +301,8 @@ namespace AIChatBot.Hubs
             }
             finally
             {
+                _activeRequests.TryRemove(Context.ConnectionId, out _);
+                cts.Dispose();
                 await Clients.Caller.SendAsync("TypingStopped");
             }
         }

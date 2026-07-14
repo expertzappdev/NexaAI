@@ -9,14 +9,15 @@ class SignalrService {
 
   public async connect(
     token: string,
-    onReceiveMessage: (payload: { role: string; content: string; createdAt: string; model?: string; totalTokens?: number }) => void,
+    onReceiveMessage: (payload: { id?: number; role: string; content: string; createdAt: string; model?: string; totalTokens?: number; isStopped?: boolean }) => void,
     onTypingStarted: () => void,
     onTypingStopped: () => void,
     onErrorMessage: (error: string) => void,
     onConnectionChange: (connected: boolean) => void,
     onSearchStatus?: (status: string) => void,
-    onRegenerateComplete?: (payload: { messageId: number; content: string; model: string; totalTokens: number }) => void,
-    onEditMessageComplete?: (payload: { editedMessageId: number; newContent: string; editedAt: string; assistantResponse: { role: string; content: string; createdAt: string; model?: string; totalTokens?: number } }) => void
+    onRegenerateComplete?: (payload: { messageId: number; content: string; model: string; totalTokens: number; isStopped?: boolean }) => void,
+    onEditMessageComplete?: (payload: { editedMessageId: number; newContent: string; editedAt: string; assistantResponse: { id?: number; role: string; content: string; createdAt: string; model?: string; totalTokens?: number; isStopped?: boolean } }) => void,
+    onReceiveChunk?: (chunk: string) => void
   ): Promise<void> {
     if (this.connection) {
       if (this.connection.state === HubConnectionState.Connected) {
@@ -80,6 +81,12 @@ class SignalrService {
       }
     });
 
+    this.connection.on('ReceiveChunk', (chunk) => {
+      if (onReceiveChunk) {
+        onReceiveChunk(chunk);
+      }
+    });
+
     this.connection.onreconnecting((error) => {
       console.warn('SignalR reconnecting due to error:', error);
       if (this.onConnectionChangeCallback) this.onConnectionChangeCallback(false);
@@ -140,6 +147,13 @@ class SignalrService {
       throw new Error('Cannot edit message. SignalR is not connected.');
     }
     await this.connection.invoke('EditMessage', messageId, content, model);
+  }
+
+  public async stopGenerating(): Promise<void> {
+    if (!this.connection || this.connection.state !== HubConnectionState.Connected) {
+      return;
+    }
+    await this.connection.invoke('StopGenerating');
   }
 
   public isConnected(): boolean {

@@ -13,6 +13,7 @@ namespace AIChatBot.Models.Responses
         public string? Model { get; set; }
         public bool IsEdited { get; set; }
         public DateTime? EditedAt { get; set; }
+        public bool IsStopped { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 }

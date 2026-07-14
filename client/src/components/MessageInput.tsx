@@ -1,10 +1,10 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { ArrowUp, Paperclip } from 'lucide-react';
+import { ArrowUp, Paperclip, Square } from 'lucide-react';
 import { useChat } from '../store/ChatContext';
 import ModelSelector from './ModelSelector';
 
 const MessageInput: React.FC = () => {
-  const { sendMessage, isLoading } = useChat();
+  const { sendMessage, isLoading, stopGenerating } = useChat();
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -82,22 +82,28 @@ const MessageInput: React.FC = () => {
           <ModelSelector />
         </div>
 
-        {/* Circular Send Button with gradient */}
-        <button
-          onClick={handleSend}
-          disabled={!text.trim() || isLoading}
-          className={`flex items-center justify-center w-9.5 h-9.5 rounded-full mb-0.5 transition-all focus:outline-none ${
-            text.trim() && !isLoading
-              ? 'bg-gradient-to-tr from-blue-600 to-purple-600 text-white shadow-[0_0_15px_rgba(139,92,246,0.35)] hover:brightness-110'
-              : 'bg-zinc-800 text-zinc-650 cursor-not-allowed'
-          }`}
-        >
-          {isLoading ? (
-            <div className="w-4 h-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin"></div>
-          ) : (
+        {/* Circular Send / Stop Button */}
+        {isLoading ? (
+          <button
+            onClick={stopGenerating}
+            title="Stop Generating"
+            className="flex items-center justify-center w-9.5 h-9.5 rounded-full mb-0.5 transition-all focus:outline-none bg-red-650 hover:bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.35)]"
+          >
+            <Square className="w-4 h-4 fill-white text-white" />
+          </button>
+        ) : (
+          <button
+            onClick={handleSend}
+            disabled={!text.trim()}
+            className={`flex items-center justify-center w-9.5 h-9.5 rounded-full mb-0.5 transition-all focus:outline-none ${
+              text.trim()
+                ? 'bg-gradient-to-tr from-blue-600 to-purple-600 text-white shadow-[0_0_15px_rgba(139,92,246,0.35)] hover:brightness-110'
+                : 'bg-zinc-800 text-zinc-650 cursor-not-allowed'
+            }`}
+          >
             <ArrowUp className="w-5 h-5" />
-          )}
-        </button>
+          </button>
+        )}
       </div>
       <p className="text-[10px] text-center text-zinc-600 mt-2 font-medium">
         Nexa AI may display inaccurate info. Verify credentials and responses.

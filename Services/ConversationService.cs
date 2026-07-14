@@ -352,6 +352,7 @@ namespace AIChatBot.Services
             string content, 
             string model,
             Func<string, Task>? onStatusUpdate = null,
+            Func<string, Task>? onChunkReceived = null,
             CancellationToken cancellationToken = default)
         {
             // 1. Verify Ownership & Load Conversation
@@ -407,6 +408,17 @@ namespace AIChatBot.Services
                 searchResults = await _tavilyService.SearchAsync(content, cancellationToken);
             }
 
+            // Save User Message in Db first
+            var userMessage = new Message
+            {
+                ConversationId = conversationId,
+                Role = "user",
+                Content = content,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _messageRepository.AddAsync(userMessage, cancellationToken);
+            await _messageRepository.SaveChangesAsync(cancellationToken);
+
             // 3. Build Groq Chat History
             var chatHistory = new List<GroqMessage>();
             
@@ -421,8 +433,8 @@ namespace AIChatBot.Services
                 });
             }
 
-            // Map all existing messages ordered by creation
-            foreach (var dbMsg in conversation.Messages.OrderBy(m => m.CreatedAt))
+            // Map all existing messages ordered by creation (excluding the user message we just saved to DB, to avoid duplicate rendering)
+            foreach (var dbMsg in conversation.Messages.Where(m => m.Id != userMessage.Id).OrderBy(m => m.CreatedAt))
             {
                 chatHistory.Add(new GroqMessage
                 {
@@ -449,30 +461,50 @@ namespace AIChatBot.Services
             });
 
             // 4. Call Groq Service
-            var groqResponse = await _groqService.SendMessageAsync(chatHistory, finalModel, cancellationToken);
+            string assistantContent = "";
+            int? promptTokens = 0;
+            int? completionTokens = 0;
+            int? totalTokens = 0;
+            bool isStopped = false;
+            var modelUsed = finalModel;
 
-            // 5. Extract Response Content and Token Info
-            var assistantContent = groqResponse.Choices[0].Message.Content;
-            var promptTokens = groqResponse.Usage?.PromptTokens;
-            var completionTokens = groqResponse.Usage?.CompletionTokens;
-            var totalTokens = groqResponse.Usage?.TotalTokens;
-            
-            var modelUsed = groqResponse.Model;
+            var partialContent = new System.Text.StringBuilder();
+            Action<string> chunkHandler = (chunk) =>
+            {
+                partialContent.Append(chunk);
+                if (onChunkReceived != null)
+                {
+                    onChunkReceived(chunk).GetAwaiter().GetResult();
+                }
+            };
+
+            try
+            {
+                var groqResponse = await _groqService.SendMessageAsync(
+                    chatHistory, 
+                    finalModel, 
+                    chunkHandler, 
+                    cancellationToken);
+
+                assistantContent = groqResponse.Choices[0].Message.Content;
+                promptTokens = groqResponse.Usage?.PromptTokens;
+                completionTokens = groqResponse.Usage?.CompletionTokens;
+                totalTokens = groqResponse.Usage?.TotalTokens;
+                modelUsed = groqResponse.Model;
+            }
+            catch (OperationCanceledException)
+            {
+                isStopped = true;
+                _logger.LogWarning("Groq API call was cancelled.");
+                assistantContent = partialContent.ToString();
+            }
+
             if (requiresSearch)
             {
-                // Indicate search usage in the persisted model name
                 modelUsed += " + Search";
             }
 
-            // 6. Save Messages in Db
-            var userMessage = new Message
-            {
-                ConversationId = conversationId,
-                Role = "user",
-                Content = content,
-                CreatedAt = DateTime.UtcNow
-            };
-
+            // 5. Save assistant response in Db
             var assistantMessage = new Message
             {
                 ConversationId = conversationId,
@@ -482,26 +514,27 @@ namespace AIChatBot.Services
                 CompletionTokens = completionTokens,
                 TotalTokens = totalTokens,
                 Model = modelUsed,
+                IsStopped = isStopped,
                 CreatedAt = DateTime.UtcNow
             };
 
             conversation.UpdatedAt = DateTime.UtcNow;
 
-            await _messageRepository.AddAsync(userMessage, cancellationToken);
             await _messageRepository.AddAsync(assistantMessage, cancellationToken);
-            
             _conversationRepository.Update(conversation);
             await _conversationRepository.SaveChangesAsync(cancellationToken);
 
-            _logger.LogInformation("Message cycle complete. User msg ID: {UserMsgId}, Assistant msg ID: {AssistantMsgId}", 
-                userMessage.Id, assistantMessage.Id);
+            _logger.LogInformation("Message cycle complete. User msg ID: {UserMsgId}, Assistant msg ID: {AssistantMsgId}, Stopped: {Stopped}", 
+                userMessage.Id, assistantMessage.Id, isStopped);
 
             return new ChatResponse
             {
                 Success = true,
                 Message = assistantContent,
                 Model = modelUsed,
-                TotalTokens = totalTokens
+                TotalTokens = totalTokens,
+                IsStopped = isStopped,
+                MessageId = assistantMessage.Id
             };
         }
 
@@ -510,6 +543,7 @@ namespace AIChatBot.Services
             int messageId,
             string currentModel,
             Func<string, Task>? onStatusUpdate = null,
+            Func<string, Task>? onChunkReceived = null,
             CancellationToken cancellationToken = default)
         {
             // 1. Fetch assistant message
@@ -632,15 +666,44 @@ namespace AIChatBot.Services
             });
 
             // 5. Call Groq
-            var groqResponse = await _groqService.SendMessageAsync(chatHistory, finalModel, cancellationToken);
+            string assistantContent = "";
+            int? promptTokens = 0;
+            int? completionTokens = 0;
+            int? totalTokens = 0;
+            bool isStopped = false;
+            var modelUsed = finalModel;
 
-            // 6. Extract results
-            var assistantContent = groqResponse.Choices[0].Message.Content;
-            var promptTokens = groqResponse.Usage?.PromptTokens;
-            var completionTokens = groqResponse.Usage?.CompletionTokens;
-            var totalTokens = groqResponse.Usage?.TotalTokens;
+            var partialContent = new System.Text.StringBuilder();
+            Action<string> chunkHandler = (chunk) =>
+            {
+                partialContent.Append(chunk);
+                if (onChunkReceived != null)
+                {
+                    onChunkReceived(chunk).GetAwaiter().GetResult();
+                }
+            };
 
-            var modelUsed = groqResponse.Model;
+            try
+            {
+                var groqResponse = await _groqService.SendMessageAsync(
+                    chatHistory, 
+                    finalModel, 
+                    chunkHandler, 
+                    cancellationToken);
+
+                assistantContent = groqResponse.Choices[0].Message.Content;
+                promptTokens = groqResponse.Usage?.PromptTokens;
+                completionTokens = groqResponse.Usage?.CompletionTokens;
+                totalTokens = groqResponse.Usage?.TotalTokens;
+                modelUsed = groqResponse.Model;
+            }
+            catch (OperationCanceledException)
+            {
+                isStopped = true;
+                _logger.LogWarning("Groq API call was cancelled during response regeneration.");
+                assistantContent = partialContent.ToString();
+            }
+
             if (requiresSearch)
             {
                 modelUsed += " + Search";
@@ -652,6 +715,7 @@ namespace AIChatBot.Services
             assistantMsg.CompletionTokens = completionTokens;
             assistantMsg.TotalTokens = totalTokens;
             assistantMsg.Model = modelUsed;
+            assistantMsg.IsStopped = isStopped;
 
             _messageRepository.Update(assistantMsg);
             
@@ -665,7 +729,9 @@ namespace AIChatBot.Services
                 Success = true,
                 Message = assistantContent,
                 Model = modelUsed,
-                TotalTokens = totalTokens
+                TotalTokens = totalTokens,
+                IsStopped = isStopped,
+                MessageId = assistantMsg.Id
             };
         }
 
@@ -675,6 +741,7 @@ namespace AIChatBot.Services
             string newContent,
             string currentModel,
             Func<string, Task>? onStatusUpdate = null,
+            Func<string, Task>? onChunkReceived = null,
             CancellationToken cancellationToken = default)
         {
             // 1. Fetch user message and verify ownership
@@ -721,11 +788,12 @@ namespace AIChatBot.Services
                 conversation.Messages.Remove(msg);
             }
 
-            // 3. Update the user message content
+            // 3. Update the user message content and save early
             userMessage.Content = newContent;
             userMessage.IsEdited = true;
             userMessage.EditedAt = DateTime.UtcNow;
             _messageRepository.Update(userMessage);
+            await _conversationRepository.SaveChangesAsync(cancellationToken);
 
             // 4. Web Search / Tavily logic
             bool requiresSearch = false;
@@ -802,14 +870,44 @@ namespace AIChatBot.Services
             });
 
             // 6. Call Groq Service
-            var groqResponse = await _groqService.SendMessageAsync(chatHistory, finalModel, cancellationToken);
+            string assistantContent = "";
+            int? promptTokens = 0;
+            int? completionTokens = 0;
+            int? totalTokens = 0;
+            bool isStopped = false;
+            var modelUsed = finalModel;
 
-            var assistantContent = groqResponse.Choices[0].Message.Content;
-            var promptTokens = groqResponse.Usage?.PromptTokens;
-            var completionTokens = groqResponse.Usage?.CompletionTokens;
-            var totalTokens = groqResponse.Usage?.TotalTokens;
+            var partialContent = new System.Text.StringBuilder();
+            Action<string> chunkHandler = (chunk) =>
+            {
+                partialContent.Append(chunk);
+                if (onChunkReceived != null)
+                {
+                    onChunkReceived(chunk).GetAwaiter().GetResult();
+                }
+            };
 
-            var modelUsed = groqResponse.Model;
+            try
+            {
+                var groqResponse = await _groqService.SendMessageAsync(
+                    chatHistory, 
+                    finalModel, 
+                    chunkHandler, 
+                    cancellationToken);
+
+                assistantContent = groqResponse.Choices[0].Message.Content;
+                promptTokens = groqResponse.Usage?.PromptTokens;
+                completionTokens = groqResponse.Usage?.CompletionTokens;
+                totalTokens = groqResponse.Usage?.TotalTokens;
+                modelUsed = groqResponse.Model;
+            }
+            catch (OperationCanceledException)
+            {
+                isStopped = true;
+                _logger.LogWarning("Groq API call was cancelled during message editing.");
+                assistantContent = partialContent.ToString();
+            }
+
             if (requiresSearch)
             {
                 modelUsed += " + Search";
@@ -825,6 +923,7 @@ namespace AIChatBot.Services
                 CompletionTokens = completionTokens,
                 TotalTokens = totalTokens,
                 Model = modelUsed,
+                IsStopped = isStopped,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -839,7 +938,9 @@ namespace AIChatBot.Services
                 Success = true,
                 Message = assistantContent,
                 Model = modelUsed,
-                TotalTokens = totalTokens
+                TotalTokens = totalTokens,
+                IsStopped = isStopped,
+                MessageId = assistantMessage.Id
             };
         }
     }

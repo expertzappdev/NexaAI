@@ -223,7 +223,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               </div>
             </div>
           ) : (
-            cleanContent && <MarkdownRenderer content={cleanContent} />
+            <>
+              {cleanContent && <MarkdownRenderer content={cleanContent} />}
+              {message.isStopped && (
+                <div className="mt-2 text-[10px] text-zinc-550 bg-zinc-950/40 border border-zinc-800/60 px-2.5 py-1 rounded-lg w-max flex items-center gap-1.5 font-medium select-none">
+                  <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full"></span>
+                  Generation stopped
+                </div>
+              )}
+            </>
           )}
 
           {/* Bubble Footer (Time and Analytics) */}

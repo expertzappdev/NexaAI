@@ -21,6 +21,10 @@ namespace AIChatBot.Services
 
         [JsonPropertyName("messages")]
         public List<GroqMessage> Messages { get; set; } = new List<GroqMessage>();
+
+        [JsonPropertyName("stream")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool Stream { get; set; }
     }
 
     public class GroqResponse
@@ -59,11 +63,39 @@ namespace AIChatBot.Services
         public int TotalTokens { get; set; }
     }
 
+    public class GroqStreamChunk
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonPropertyName("choices")]
+        public List<GroqStreamChoice> Choices { get; set; } = new List<GroqStreamChoice>();
+    }
+
+    public class GroqStreamChoice
+    {
+        [JsonPropertyName("delta")]
+        public GroqStreamDelta Delta { get; set; } = new GroqStreamDelta();
+
+        [JsonPropertyName("finish_reason")]
+        public string? FinishReason { get; set; }
+    }
+
+    public class GroqStreamDelta
+    {
+        [JsonPropertyName("role")]
+        public string? Role { get; set; }
+
+        [JsonPropertyName("content")]
+        public string? Content { get; set; }
+    }
+
     public interface IGroqService
     {
         Task<GroqResponse> SendMessageAsync(
             List<GroqMessage> chatHistory,
             string? modelOverride = null,
+            Action<string>? onChunkReceived = null,
             CancellationToken cancellationToken = default);
     }
 }
