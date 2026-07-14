@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Copy, Check, Brain, ChevronDown, ChevronUp } from 'lucide-react';
+import { User, Copy, Check, Brain, ChevronDown, ChevronUp, Star } from 'lucide-react';
 import type { Message } from '../types';
 import MarkdownRenderer from './MarkdownRenderer';
 import { useChat } from '../store/ChatContext';
@@ -13,7 +13,25 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
-  const { showToast } = useChat();
+  const [isSaving, setIsSaving] = useState(false);
+  const { showToast, savedMessages, saveMessage, unsaveMessage } = useChat();
+
+  const isSaved = savedMessages.some((sm) => sm.messageId === message.id);
+
+  const handleSaveToggle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      if (isSaved) {
+        await unsaveMessage(message.id);
+      } else {
+        await saveMessage(message.id);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleCopy = async () => {
     try {
@@ -60,6 +78,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
   return (
     <motion.div
+      id={`message-${message.id}`}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
@@ -87,15 +106,37 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             ? 'bg-gradient-to-tr from-blue-600 to-purple-600 border-indigo-500/25 text-white rounded-tr-none shadow-purple-600/5' 
             : 'bg-zinc-900/40 backdrop-blur-md border-zinc-800/80 text-zinc-150 rounded-tl-none'
         }`}>
-          {/* Copy Button (visible on hover) */}
-          <button
-            onClick={handleCopy}
-            className={`absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-800 transition-all text-zinc-400 hover:text-zinc-200 focus:outline-none focus:opacity-100 ${
-              isUser ? 'text-zinc-200 hover:text-white bg-indigo-900/60 hover:bg-indigo-900' : ''
-            }`}
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-          </button>
+          {/* Action Buttons (visible on hover) */}
+          {isUser ? (
+            <button
+              onClick={handleCopy}
+              className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-indigo-900/60 hover:bg-indigo-900 transition-all text-zinc-250 hover:text-white focus:outline-none focus:opacity-100"
+              title="Copy message"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          ) : (
+            <div className="absolute top-2.5 right-2.5 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+              {/* Save Button */}
+              <button
+                onClick={handleSaveToggle}
+                disabled={isSaving}
+                className="p-1.5 rounded-lg bg-zinc-850 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-amber-400 transition-all focus:outline-none focus:opacity-100"
+                title={isSaved ? "Remove from saved" : "Save response"}
+              >
+                <Star className={`w-3.5 h-3.5 ${isSaved ? 'fill-amber-400 text-amber-400' : ''}`} />
+              </button>
+              
+              {/* Copy Button */}
+              <button
+                onClick={handleCopy}
+                className="p-1.5 rounded-lg bg-zinc-850 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-all focus:outline-none focus:opacity-100"
+                title="Copy response"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          )}
 
           {/* Thinking Block Section */}
           {!isUser && thinking && (

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
-import type { Conversation, Message, User } from '../types';
+import type { Conversation, Message, User, SavedMessage } from '../types';
 import apiClient from '../api/client';
 import socketService from '../services/signalrService';
 import { AI_MODELS } from '../models';
@@ -42,6 +42,12 @@ interface ChatContextType {
   loadArchivedConversations: () => Promise<void>;
   archiveConversation: (id: number) => Promise<boolean>;
   restoreConversation: (id: number) => Promise<boolean>;
+  savedMessages: SavedMessage[];
+  loadSavedMessages: () => Promise<void>;
+  saveMessage: (messageId: number) => Promise<boolean>;
+  unsaveMessage: (messageId: number) => Promise<boolean>;
+  scrollToMessageId: number | null;
+  setScrollToMessageId: (id: number | null) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -60,6 +66,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
+  const [savedMessages, setSavedMessages] = useState<SavedMessage[]>([]);
+  const [scrollToMessageId, setScrollToMessageId] = useState<number | null>(null);
 
   // Store activeConversationId in a ref to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
@@ -241,6 +249,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setConversations([]);
     setArchivedConversations([]);
+    setSavedMessages([]);
     setActiveConversationId(null);
     setMessages([]);
     showToast('Signed out successfully', 'info');
@@ -262,6 +271,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await apiClient.get<Conversation[]>('/conversations');
       setConversations(sortConversationsList(response.data));
       await loadArchivedConversations();
+      await loadSavedMessages();
     } catch (error) {
       console.error('Failed to load conversations', error);
       showToast('Failed to load conversations from server', 'error');
@@ -316,6 +326,42 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Failed to restore conversation', error);
       showToast('Could not restore conversation', 'error');
+      return false;
+    }
+  };
+
+  const loadSavedMessages = async () => {
+    if (!token) return;
+    try {
+      const response = await apiClient.get<SavedMessage[]>('/messages/saved');
+      setSavedMessages(response.data);
+    } catch (error) {
+      console.error('Failed to load saved responses', error);
+    }
+  };
+
+  const saveMessage = async (messageId: number): Promise<boolean> => {
+    try {
+      await apiClient.post('/messages/save', { messageId });
+      showToast('Response saved.', 'success');
+      await loadSavedMessages();
+      return true;
+    } catch (error) {
+      console.error('Failed to save message', error);
+      showToast('Could not save response', 'error');
+      return false;
+    }
+  };
+
+  const unsaveMessage = async (messageId: number): Promise<boolean> => {
+    try {
+      await apiClient.delete(`/messages/save/${messageId}`);
+      showToast('Removed from saved.', 'success');
+      setSavedMessages((prev) => prev.filter((sm) => sm.messageId !== messageId));
+      return true;
+    } catch (error) {
+      console.error('Failed to remove saved message', error);
+      showToast('Could not remove from saved', 'error');
       return false;
     }
   };
@@ -475,6 +521,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loadArchivedConversations,
         archiveConversation,
         restoreConversation,
+        savedMessages,
+        loadSavedMessages,
+        saveMessage,
+        unsaveMessage,
+        scrollToMessageId,
+        setScrollToMessageId,
       }}
     >
       {children}

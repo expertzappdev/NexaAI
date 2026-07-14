@@ -47,3 +47,12 @@ export interface ChatResponse {
   model?: string;
   totalTokens?: number;
 }
+
+export interface SavedMessage {
+  id: number;
+  messageId: number;
+  conversationId: number;
+  conversationTitle: string;
+  content: string;
+  createdAt: string;
+}

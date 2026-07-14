@@ -12,6 +12,7 @@ namespace AIChatBot.Data
         public DbSet<User> Users => Set<User>();
         public DbSet<Conversation> Conversations => Set<Conversation>();
         public DbSet<Message> Messages => Set<Message>();
+        public DbSet<SavedMessage> SavedMessages => Set<SavedMessage>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -67,6 +68,26 @@ namespace AIChatBot.Data
                     .OnDelete(DeleteBehavior.Cascade);
 
                 entity.HasIndex(m => m.ConversationId);
+            });
+
+            // SavedMessage configuration
+            modelBuilder.Entity<SavedMessage>(entity =>
+            {
+                entity.ToTable("SavedMessages");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP(6)");
+
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Message)
+                    .WithMany()
+                    .HasForeignKey(e => e.MessageId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(e => new { e.UserId, e.MessageId }).IsUnique();
             });
         }
     }
