@@ -501,8 +501,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const editMessage = async (messageId: number, content: string) => {
-    if (editingMessageId !== null) return;
-    setEditingMessageId(messageId);
+    if (isLoading) return;
     try {
       await socketService.editMessage(messageId, content, selectedModel);
     } catch (error) {
