@@ -30,6 +30,7 @@ interface ChatContextType {
   deleteConversation: (id: number) => Promise<boolean>;
   pinConversation: (id: number, isPinned: boolean) => Promise<boolean>;
   sendMessage: (text: string) => Promise<void>;
+  stopGenerating: () => Promise<void>;
   clearMessages: () => void;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
   selectedModel: string;
@@ -70,11 +71,83 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [savedMessages, setSavedMessages] = useState<SavedMessage[]>([]);
   const [scrollToMessageId, setScrollToMessageId] = useState<number | null>(null);
 
-  // Store activeConversationId in a ref to avoid stale closures in socket event handlers
+  // Store activeConversationId and selectedModel in refs to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
+  const selectedModelRef = useRef<string>(selectedModel);
   useEffect(() => {
     activeConversationIdRef.current = activeConversationId;
   }, [activeConversationId]);
+  useEffect(() => {
+    selectedModelRef.current = selectedModel;
+  }, [selectedModel]);
+
+  // Typing effect refs for smooth streaming
+  const chunkQueueRef = useRef<string[]>([]);
+  const typingIntervalRef = useRef<any>(null);
+  const renderedTextRef = useRef<string>("");
+  const streamCompletedRef = useRef<boolean>(false);
+  const completionPayloadRef = useRef<any>(null);
+
+  const startTypingEffect = () => {
+    if (typingIntervalRef.current) return;
+
+    typingIntervalRef.current = setInterval(() => {
+      if (chunkQueueRef.current.length > 0) {
+        // Combined queued text
+        const fullQueueText = chunkQueueRef.current.join("");
+        
+        // Take approximately 2-3 words (around 10-14 characters)
+        const charsToTake = Math.min(12, fullQueueText.length);
+        const textToAppend = fullQueueText.substring(0, charsToTake);
+        const remainingText = fullQueueText.substring(charsToTake);
+        
+        chunkQueueRef.current = remainingText ? [remainingText] : [];
+        renderedTextRef.current += textToAppend;
+
+        setMessages((prev) => {
+          const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
+          if (lastMsgIndex !== -1) {
+            const updated = [...prev];
+            updated[lastMsgIndex] = {
+              ...updated[lastMsgIndex],
+              content: renderedTextRef.current,
+              isStreaming: true,
+            };
+            return updated;
+          }
+          return prev;
+        });
+      } else if (streamCompletedRef.current) {
+        // Finished receiving chunks and queue is completely drained
+        if (typingIntervalRef.current) {
+          clearInterval(typingIntervalRef.current);
+          typingIntervalRef.current = null;
+        }
+
+        const payload = completionPayloadRef.current;
+        setMessages((prev) => {
+          const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
+          if (lastMsgIndex !== -1) {
+            const updated = [...prev];
+            const lastMsg = updated[lastMsgIndex];
+            updated[lastMsgIndex] = {
+              ...lastMsg,
+              id: payload?.messageId || lastMsg.id,
+              content: payload?.content !== undefined ? payload.content : renderedTextRef.current,
+              isStreaming: false,
+              model: payload?.model || lastMsg.model,
+              totalTokens: payload?.totalTokens || lastMsg.totalTokens
+            };
+            return updated;
+          }
+          return prev;
+        });
+
+        setIsLoading(false);
+        setSearchStatus(null);
+      }
+    }, 60); // 60ms is right in the 40-80ms range for a natural typing pace
+  };
 
   // Handle SignalR connection lifecycle and event listeners
   useEffect(() => {
@@ -107,30 +180,84 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             );
           }
         },
-        () => {
-          setIsLoading(true);
+        (chunk) => {
+          const currentId = activeConversationIdRef.current;
+          if (!currentId) return;
+
+          // Push token chunk to queue and start typing ticker
+          chunkQueueRef.current.push(chunk);
+          startTypingEffect();
+
+          // Touch update time of conversation in list
+          setConversations((prev) =>
+            prev.map((c) => (c.id === currentId ? { ...c, updatedAt: new Date().toISOString() } : c))
+          );
+        },
+        (payload) => {
+          // Record completion data and flag stream completion
+          completionPayloadRef.current = payload;
+          streamCompletedRef.current = true;
+          startTypingEffect();
         },
         () => {
-          setIsLoading(false);
-          setSearchStatus(null);
+          setIsLoading(true);
+          // Reset typing effect state
+          chunkQueueRef.current = [];
+          renderedTextRef.current = "";
+          streamCompletedRef.current = false;
+          completionPayloadRef.current = null;
+          if (typingIntervalRef.current) {
+            clearInterval(typingIntervalRef.current);
+            typingIntervalRef.current = null;
+          }
+
+          const currentId = activeConversationIdRef.current;
+          if (currentId) {
+            setMessages((prev) => {
+              const lastMsg = prev[prev.length - 1];
+              if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
+                return prev;
+              }
+              return [
+                ...prev,
+                {
+                  id: Date.now() + Math.random(),
+                  conversationId: currentId,
+                  role: 'assistant',
+                  content: '',
+                  createdAt: new Date().toISOString(),
+                  isStreaming: true,
+                  model: selectedModelRef.current
+                }
+              ];
+            });
+          }
+        },
+        () => {
+          // Typing/Streaming stopped natively or aborted
         },
         (errorMsg) => {
           showToast(errorMsg, 'error');
           setSearchStatus(null);
-          // Append error message to screen
-          const currentId = activeConversationIdRef.current;
-          if (currentId) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: Date.now() + Math.random(),
-                conversationId: currentId,
-                role: 'assistant',
-                content: `Error: ${errorMsg}`,
-                createdAt: new Date().toISOString(),
-              },
-            ]);
+          setIsLoading(false);
+          if (typingIntervalRef.current) {
+            clearInterval(typingIntervalRef.current);
+            typingIntervalRef.current = null;
           }
+          setMessages((prev) => {
+            const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
+            if (lastMsgIndex !== -1) {
+              const updated = [...prev];
+              const lastMsg = updated[lastMsgIndex];
+              updated[lastMsgIndex] = {
+                ...lastMsg,
+                isStreaming: false,
+                content: lastMsg.content || 'Generation interrupted.'
+              };
+              return updated;
+            }
+            return prev;
+          });
         },
         (connected) => {
           setSocketConnected(connected);
@@ -148,7 +275,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     return () => {
-      // Disconnect handled explicitly or when token resets to null
+      if (typingIntervalRef.current) {
+        clearInterval(typingIntervalRef.current);
+      }
     };
   }, [token]);
 
@@ -523,6 +652,35 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const stopGenerating = async () => {
+    try {
+      await socketService.stopGenerating();
+    } catch (error) {
+      console.error('Failed to stop generating via SignalR', error);
+    } finally {
+      if (typingIntervalRef.current) {
+        clearInterval(typingIntervalRef.current);
+        typingIntervalRef.current = null;
+      }
+      setIsLoading(false);
+      setSearchStatus(null);
+      setMessages((prev) => {
+        const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
+        if (lastMsgIndex !== -1) {
+          const updated = [...prev];
+          const lastMsg = updated[lastMsgIndex];
+          updated[lastMsgIndex] = {
+            ...lastMsg,
+            isStreaming: false,
+            content: lastMsg.content || 'Generation interrupted.'
+          };
+          return updated;
+        }
+        return prev;
+      });
+    }
+  };
+
   const clearMessages = () => {
     setMessages([]);
     setActiveConversationId(null);
@@ -547,6 +705,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteConversation,
         pinConversation,
         sendMessage,
+        stopGenerating,
         clearMessages,
         showToast,
         selectedModel,

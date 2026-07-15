@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Runtime.CompilerServices;
 using AIChatBot.Configurations;
 
 namespace AIChatBot.Services
@@ -108,6 +109,105 @@ namespace AIChatBot.Services
                 stopwatch.Stop();
                 _logger.LogError(ex, "An unexpected error occurred while communicating with Groq.");
                 throw;
+            }
+        }
+
+        public async IAsyncEnumerable<GroqStreamResponse> SendMessageStreamAsync(
+            List<GroqMessage> chatHistory,
+            string? modelOverride = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var client = _httpClientFactory.CreateClient("GroqClient");
+
+            var model = modelOverride ?? _settings.DefaultModel;
+            var requestBody = new
+            {
+                model = model,
+                messages = chatHistory,
+                stream = true,
+                stream_options = new { include_usage = true }
+            };
+
+            var jsonContent = JsonSerializer.Serialize(requestBody);
+            var httpContent = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            var request = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
+            {
+                Content = httpContent
+            };
+
+            // Headers
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
+
+            _logger.LogInformation("Sending streaming chat request to Groq. Model: {Model}. History size: {Count} messages.", 
+                model, chatHistory.Count);
+
+            HttpResponseMessage response;
+            try
+            {
+                response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to connect to Groq API for streaming.");
+                throw;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogError("Groq API returned error for streaming. Status: {Status}. Body: {Body}", 
+                    response.StatusCode, responseBody);
+
+                if (response.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    throw new UnauthorizedAccessException("Groq API key is invalid or unauthorized.");
+                }
+
+                if ((int)response.StatusCode == 429)
+                {
+                    throw new HttpRequestException("Groq API rate limit exceeded.", null, HttpStatusCode.TooManyRequests);
+                }
+
+                throw new HttpRequestException($"Groq API request failed with status code {response.StatusCode}.", null, response.StatusCode);
+            }
+
+            using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken))
+            using (var reader = new System.IO.StreamReader(stream))
+            {
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+                while (!reader.EndOfStream)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var line = await reader.ReadLineAsync();
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+
+                    if (line.StartsWith("data: "))
+                    {
+                        var data = line.Substring(6).Trim();
+                        if (data == "[DONE]")
+                        {
+                            break;
+                        }
+
+                        GroqStreamResponse? chunk = null;
+                        try
+                        {
+                            chunk = JsonSerializer.Deserialize<GroqStreamResponse>(data, options);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to deserialize Groq stream chunk: {Data}", data);
+                        }
+
+                        if (chunk != null)
+                        {
+                            yield return chunk;
+                        }
+                    }
+                }
             }
         }
     }

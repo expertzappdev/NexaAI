@@ -29,6 +29,7 @@ export interface Message {
   model?: string;
   createdAt: string;
   feedbackType?: 'Like' | 'Dislike' | null;
+  isStreaming?: boolean;
 }
 
 export interface AuthResponse {

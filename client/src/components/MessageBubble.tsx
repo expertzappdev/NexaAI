@@ -167,7 +167,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           {isUser ? (
             <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
           ) : (
-            cleanContent && <MarkdownRenderer content={cleanContent} />
+            cleanContent && <MarkdownRenderer content={cleanContent} isStreaming={message.isStreaming} />
           )}
 
           {/* Bubble Footer (Time and Analytics) */}
