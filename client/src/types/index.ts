@@ -33,6 +33,7 @@ export interface Message {
   isStreaming?: boolean;
   createdAt: string;
   feedbackType?: 'Like' | 'Dislike' | null;
+  isStreaming?: boolean;
 }
 
 export interface AuthResponse {

@@ -24,14 +24,23 @@ const MessageInput: React.FC = () => {
     }
   }, [isLoading]);
 
+  const handleStop = async () => {
+    await stopGenerating();
+    // Force focus back immediately after stopping
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 50);
+  };
+
   const handleSend = async () => {
     if (!text.trim() || isLoading) return;
     const currentText = text;
     setText('');
     
-    // Reset height
+    // Reset height and keep focus
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
+      textareaRef.current.focus();
     }
 
     await sendMessage(currentText);

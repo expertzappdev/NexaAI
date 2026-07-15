@@ -74,6 +74,7 @@ namespace AIChatBot.Hubs
                     "qwen/qwen3.6-27b",
                     "qwen/qwen3-32b",
                     "groq/compound-mini",
+                    "groq/compound",
                     "nexa-web-search"
                 };
 
@@ -127,6 +128,10 @@ namespace AIChatBot.Hubs
             catch (UnauthorizedAccessException ex)
             {
                 await Clients.Caller.SendAsync("ErrorMessage", "You are not authorized: " + ex.Message);
+            }
+            catch (OperationCanceledException)
+            {
+                // Silence operation canceled logs / expected path when user clicks Stop
             }
             catch (Exception ex)
             {

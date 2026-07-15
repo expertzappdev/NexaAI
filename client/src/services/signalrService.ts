@@ -51,6 +51,14 @@ class SignalrService {
       onReceiveMessage(payload);
     });
 
+    this.connection.on('ReceiveMessageChunk', (chunk: string) => {
+      onReceiveMessageChunk(chunk);
+    });
+
+    this.connection.on('ReceiveMessageCompleted', (payload) => {
+      onReceiveMessageCompleted(payload);
+    });
+
     this.connection.on('TypingStarted', () => {
       onTypingStarted();
     });

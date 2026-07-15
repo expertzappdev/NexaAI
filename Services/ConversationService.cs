@@ -384,7 +384,19 @@ namespace AIChatBot.Services
                 conversation.SelectedModel = model;
             }
 
-            // 2. Decide if web search is needed
+            // 2. Save User Message immediately in Db
+            var userMessage = new Message
+            {
+                ConversationId = conversationId,
+                Role = "user",
+                Content = content,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _messageRepository.AddAsync(userMessage, cancellationToken);
+            conversation.UpdatedAt = DateTime.UtcNow;
+            await _conversationRepository.SaveChangesAsync(cancellationToken);
+
+            // 3. Decide if web search is needed
             bool requiresSearch = false;
             string searchReason = "";
             string finalModel = model;
@@ -431,7 +443,9 @@ namespace AIChatBot.Services
             var chatHistory = new List<GroqMessage>();
             
             // Add system prompt if history is empty (or as first message)
-            bool hasSystemMessage = conversation.Messages.Any(m => m.Role.Equals("system", StringComparison.OrdinalIgnoreCase));
+            bool hasSystemMessage = conversation.Messages
+                .Where(m => m.Id != userMessage.Id)
+                .Any(m => m.Role.Equals("system", StringComparison.OrdinalIgnoreCase));
             if (!hasSystemMessage)
             {
                 chatHistory.Add(new GroqMessage

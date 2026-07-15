@@ -8,9 +8,24 @@ import TypingIndicator from './TypingIndicator';
 const ChatWindow: React.FC = () => {
   const { messages, isLoading, scrollToMessageId, setScrollToMessageId } = useChat();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const lastScrollTimeRef = useRef<number>(0);
+  const isNearBottomRef = useRef<boolean>(true);
+
+  // Monitor user scrolling to detect if they scroll up away from the bottom
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const threshold = 150; // pixels
+    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+    isNearBottomRef.current = nearBottom;
+  };
 
   // Auto scroll to bottom or to a specific message on update
   useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
     if (scrollToMessageId) {
       const element = document.getElementById(`message-${scrollToMessageId}`);
       if (element) {
@@ -22,8 +37,24 @@ const ChatWindow: React.FC = () => {
         }, 2000);
         setScrollToMessageId(null);
       }
-    } else {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+
+    if (messages.length === 0) return;
+
+    const lastMessage = messages[messages.length - 1];
+
+    if (lastMessage.role === 'user') {
+      // Force scroll to bottom when user sends a message
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+      isNearBottomRef.current = true;
+    } else if (isNearBottomRef.current) {
+      // Smooth continuous scroll with throttling to avoid browser jitter
+      const now = Date.now();
+      if (now - lastScrollTimeRef.current > 100) {
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+        lastScrollTimeRef.current = now;
+      }
     }
   }, [messages, isLoading, scrollToMessageId, setScrollToMessageId]);
 
@@ -32,7 +63,11 @@ const ChatWindow: React.FC = () => {
   return (
     <div className="flex-grow flex flex-col h-full overflow-hidden bg-[#050505]">
       {/* Scrollable messages or welcome grid */}
-      <div className="flex-grow overflow-y-auto px-4 py-6 md:px-6">
+      <div 
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-grow overflow-y-auto px-4 py-6 md:px-6"
+      >
         {hasMessages ? (
           <div className="max-w-2xl mx-auto space-y-6 pb-20">
             {messages.map((msg) => (
