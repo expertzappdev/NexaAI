@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { LogOut, Plus, X, Pin, Search, Archive, ChevronDown, ChevronRight, Star } from 'lucide-react';
+import { LogOut, Plus, X, Pin, Search, Archive, ChevronDown, ChevronRight, Star, Brain } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useChat } from '../store/ChatContext';
 import ConversationItem from './ConversationItem';
 
@@ -55,12 +56,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       >
         {/* Header section (Nexa AI logo with glow + Title) */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-900">
-          <div className="flex items-center space-x-3">
+          <Link to="/chat" className="flex items-center space-x-3 hover:opacity-90 transition-opacity">
             <div className="relative w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 via-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.3)] text-white border border-white/10">
               <span className="text-base font-extrabold font-sans">N</span>
             </div>
             <span className="font-extrabold text-lg text-white tracking-tight">Nexa AI</span>
-          </div>
+          </Link>
           {/* Close button for mobile drawer */}
           <button
             onClick={onClose}
@@ -233,7 +234,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Footer Layout: Logout + User Badge */}
-        <div className="p-4 border-t border-zinc-900 bg-zinc-950/80 space-y-3">
+        <div className="p-4 border-t border-zinc-900 bg-zinc-950/80 space-y-2">
+          {/* Memory Management Link */}
+          <Link
+            to="/memories"
+            className="w-full flex items-center space-x-3 px-3 py-2.5 text-zinc-400 hover:text-zinc-200 transition-colors text-sm font-medium focus:outline-none"
+          >
+            <Brain className="w-4.5 h-4.5 text-zinc-500" />
+            <span>Memory Management</span>
+          </Link>
+
           {/* Logout Trigger */}
           <button
             onClick={logout}

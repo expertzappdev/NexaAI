@@ -19,6 +19,7 @@ namespace AIChatBot.Services
         private readonly ITavilyService _tavilyService;
         private readonly IWebSearchDecisionService _webSearchDecisionService;
         private readonly IRepository<MessageFeedback> _feedbackRepository;
+        private readonly IRepository<UserMemory> _userMemoryRepository;
         private readonly ILogger<ConversationService> _logger;
 
         public ConversationService(
@@ -28,6 +29,7 @@ namespace AIChatBot.Services
             ITavilyService tavilyService,
             IWebSearchDecisionService webSearchDecisionService,
             IRepository<MessageFeedback> feedbackRepository,
+            IRepository<UserMemory> userMemoryRepository,
             ILogger<ConversationService> logger)
         {
             _conversationRepository = conversationRepository;
@@ -36,6 +38,7 @@ namespace AIChatBot.Services
             _tavilyService = tavilyService;
             _webSearchDecisionService = webSearchDecisionService;
             _feedbackRepository = feedbackRepository;
+            _userMemoryRepository = userMemoryRepository;
             _logger = logger;
         }
 
@@ -482,6 +485,9 @@ namespace AIChatBot.Services
                 Content = content
             });
 
+            // Inject User memories dynamically into System Prompt
+            await InjectUserMemoriesAsync(userId, chatHistory, cancellationToken);
+
             // 4. Call Groq Service
             string assistantContent = "";
             int? promptTokens = 0;
@@ -687,6 +693,9 @@ namespace AIChatBot.Services
                 Content = userPromptMsg.Content
             });
 
+            // Inject User memories dynamically into System Prompt
+            await InjectUserMemoriesAsync(userId, chatHistory, cancellationToken);
+
             // 5. Call Groq
             string assistantContent = "";
             int? promptTokens = 0;
@@ -884,12 +893,15 @@ namespace AIChatBot.Services
                 });
             }
 
-            // Append the updated user message
+            // Append the new User message
             chatHistory.Add(new GroqMessage
             {
                 Role = "user",
                 Content = newContent
             });
+
+            // Inject User memories dynamically into System Prompt
+            await InjectUserMemoriesAsync(userId, chatHistory, cancellationToken);
 
             // 6. Call Groq Service
             string assistantContent = "";
@@ -964,6 +976,39 @@ namespace AIChatBot.Services
                 IsStopped = isStopped,
                 MessageId = assistantMessage.Id
             };
+        }
+
+        private async Task InjectUserMemoriesAsync(int userId, List<GroqMessage> chatHistory, CancellationToken cancellationToken)
+        {
+            var memories = await _userMemoryRepository.GetQueryable()
+                .Where(m => m.UserId == userId)
+                .ToListAsync(cancellationToken);
+
+            if (memories.Count > 0)
+            {
+                var memoryPrompt = new System.Text.StringBuilder();
+                memoryPrompt.AppendLine("You have the following long-term memory about the user preference(s):");
+                foreach (var mem in memories)
+                {
+                    memoryPrompt.AppendLine($"- {mem.Title}: {mem.Content}");
+                }
+                memoryPrompt.AppendLine("\nBased on these preferences, adapt your responses appropriately.");
+                memoryPrompt.AppendLine("Additionally, you MUST write down what user preference(s) you remembered in a separate section at the end of your response under a header named \"### What I Remembered:\". Example:\n### What I Remembered:\n- Preference details...");
+
+                var systemMessage = chatHistory.FirstOrDefault(m => m.Role.Equals("system", StringComparison.OrdinalIgnoreCase));
+                if (systemMessage != null)
+                {
+                    systemMessage.Content = systemMessage.Content + "\n\n" + memoryPrompt.ToString();
+                }
+                else
+                {
+                    chatHistory.Insert(0, new GroqMessage
+                    {
+                        Role = "system",
+                        Content = "You are Nexa AI assistant\n\n" + memoryPrompt.ToString()
+                    });
+                }
+            }
         }
     }
 }

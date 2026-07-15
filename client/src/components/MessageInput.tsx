@@ -94,7 +94,7 @@ const MessageInput: React.FC = () => {
         {/* Circular Send / Stop Button */}
         {isLoading ? (
           <button
-            onClick={stopGenerating}
+            onClick={handleStop}
             title="Stop Generating"
             className="flex items-center justify-center w-9.5 h-9.5 rounded-full mb-0.5 transition-all focus:outline-none bg-red-650 hover:bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.35)]"
           >

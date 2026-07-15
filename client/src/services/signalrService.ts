@@ -10,6 +10,8 @@ class SignalrService {
   public async connect(
     token: string,
     onReceiveMessage: (payload: { id?: number; role: string; content: string; createdAt: string; model?: string; totalTokens?: number; isStopped?: boolean }) => void,
+    onReceiveMessageChunk: (chunk: string) => void,
+    onReceiveMessageCompleted: (payload: any) => void,
     onTypingStarted: () => void,
     onTypingStopped: () => void,
     onErrorMessage: (error: string) => void,

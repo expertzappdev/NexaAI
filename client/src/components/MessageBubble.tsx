@@ -20,7 +20,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     editingMessageId, 
     setEditingMessageId, 
     editMessage, 
-    isLoading 
+    isLoading,
+    showToast,
+    toggleFeedback
   } = useChat();
 
   const isCurrentlyRegenerating = regeneratingMessageId === message.id;
@@ -51,24 +53,39 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     const thinkRegex = /<(think|thought)>([\s\S]*?)<\/\1>/gi;
     const match = thinkRegex.exec(content);
     
+    let thinking: string | null = null;
+    let cleanContent = content;
+    let isThinkingComplete = true;
+
     if (match) {
-      const thinking = match[2].trim();
-      const cleanContent = content.replace(thinkRegex, '').trim();
-      return { thinking, cleanContent, isThinkingComplete: true };
+      thinking = match[2].trim();
+      cleanContent = content.replace(thinkRegex, '').trim();
+    } else {
+      // 2. Try to find an unclosed think tag (useful for streaming/incomplete messages)
+      const unclosedRegex = /<(think|thought)>([\s\S]*)/i;
+      const unclosedMatch = unclosedRegex.exec(content);
+      if (unclosedMatch) {
+        thinking = unclosedMatch[2].trim();
+        cleanContent = '';
+        isThinkingComplete = false;
+      }
+    }
+
+    // Now extract the "What I Remembered" section from cleanContent (if assistant message)
+    let rememberedSection: string | null = null;
+    if (message.role === 'assistant' && cleanContent) {
+      const memorySeparatorRegex = /###\s*what\s+i\s+remembered\s*:?/i;
+      const parts = cleanContent.split(memorySeparatorRegex);
+      if (parts.length > 1) {
+        cleanContent = parts[0].trim();
+        rememberedSection = parts[1].trim();
+      }
     }
     
-    // 2. Try to find an unclosed think tag (useful for streaming/incomplete messages)
-    const unclosedRegex = /<(think|thought)>([\s\S]*)/i;
-    const unclosedMatch = unclosedRegex.exec(content);
-    if (unclosedMatch) {
-      const thinking = unclosedMatch[2].trim();
-      return { thinking, cleanContent: '', isThinkingComplete: false };
-    }
-    
-    return { thinking: null, cleanContent: content, isThinkingComplete: true };
+    return { thinking, cleanContent, isThinkingComplete, rememberedSection };
   };
 
-  const { thinking, cleanContent, isThinkingComplete } = parseMessageContent(message.content);
+  const { thinking, cleanContent, isThinkingComplete, rememberedSection } = parseMessageContent(message.content);
 
   return (
     <motion.div
@@ -227,6 +244,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           ) : (
             <>
               {cleanContent && <MarkdownRenderer content={cleanContent} />}
+              {rememberedSection && (
+                <div className="mt-4 p-3.5 rounded-xl bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/20 text-zinc-300 text-xs flex flex-col gap-1.5 transition-all duration-200 shadow-[inset_0_1px_1px_rgba(255,255,255,0.02)]">
+                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-[10px] uppercase tracking-wider select-none">
+                    <Brain className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>What Nexa Remembered</span>
+                  </div>
+                  <div className="text-zinc-300/95 leading-relaxed pl-5 whitespace-pre-wrap font-sans text-xs">
+                    {rememberedSection}
+                  </div>
+                </div>
+              )}
               {message.isStopped && (
                 <div className="mt-2 text-[10px] text-zinc-550 bg-zinc-950/40 border border-zinc-800/60 px-2.5 py-1 rounded-lg w-max flex items-center gap-1.5 font-medium select-none">
                   <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full"></span>
