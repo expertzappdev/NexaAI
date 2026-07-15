@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { LogOut, Plus, X, Pin, Search, Archive, ChevronDown, ChevronRight, Star } from 'lucide-react';
 import { useChat } from '../store/ChatContext';
 import ConversationItem from './ConversationItem';
+import { type SavedMessage } from '../types';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -197,7 +198,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                         No saved responses
                       </div>
                     ) : (
-                      savedMessages.map((sm) => (
+                      savedMessages.map((sm: SavedMessage) => (
                         <div
                           key={sm.id}
                           onClick={() => handleSavedMessageClick(sm.conversationId, sm.messageId)}
