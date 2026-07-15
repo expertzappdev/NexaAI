@@ -8,7 +8,7 @@ interface NavbarProps {
 }
 
 const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
-  const { conversations, activeConversationId, messages, user } = useChat();
+  const { conversations, activeConversationId, messages, user, isTemporaryMode } = useChat();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 

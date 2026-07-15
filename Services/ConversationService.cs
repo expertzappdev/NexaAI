@@ -432,7 +432,6 @@ namespace AIChatBot.Services
             }
 
 
-
             // 3. Build Groq Chat History
             var chatHistory = new List<GroqMessage>();
             

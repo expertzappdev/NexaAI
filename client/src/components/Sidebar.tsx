@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { LogOut, Plus, X, Pin, Search, Archive, ChevronDown, ChevronRight, Star, Keyboard } from 'lucide-react';
+import { LogOut, Plus, X, Pin, Search, Archive, ChevronDown, ChevronRight, Star, Brain, Keyboard } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useChat } from '../store/ChatContext';
 import ConversationItem from './ConversationItem';
 import { type SavedMessage } from '../types';
@@ -7,7 +8,7 @@ import { type SavedMessage } from '../types';
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  onShortcutClick: () => void;
+  onShortcutClick?: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onShortcutClick }) => {
@@ -268,15 +269,26 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onShortcutClick }) =
         </div>
 
         {/* Footer Layout: Logout + User Badge */}
-        <div className="p-4 border-t border-zinc-900 bg-zinc-950/80 space-y-2.5">
-          {/* Keyboard Shortcuts Trigger */}
-          <button
-            onClick={onShortcutClick}
-            className="w-full flex items-center space-x-3 px-3 py-2 text-zinc-400 hover:text-zinc-200 transition-colors text-sm font-medium focus:outline-none cursor-pointer"
+        <div className="p-4 border-t border-zinc-900 bg-zinc-950/80 space-y-2">
+          {/* Memory Management Link */}
+          <Link
+            to="/memories"
+            className="w-full flex items-center space-x-3 px-3 py-2.5 text-zinc-400 hover:text-zinc-200 transition-colors text-sm font-medium focus:outline-none"
           >
-            <Keyboard className="w-4.5 h-4.5 text-zinc-500" />
-            <span>Keyboard Shortcuts</span>
-          </button>
+            <Brain className="w-4.5 h-4.5 text-zinc-500" />
+            <span>Memory Management</span>
+          </Link>
+
+          {/* Keyboard Shortcuts Trigger */}
+          {onShortcutClick && (
+            <button
+              onClick={onShortcutClick}
+              className="w-full flex items-center space-x-3 px-3 py-2 text-zinc-400 hover:text-zinc-200 transition-colors text-sm font-medium focus:outline-none cursor-pointer"
+            >
+              <Keyboard className="w-4.5 h-4.5 text-zinc-500" />
+              <span>Keyboard Shortcuts</span>
+            </button>
+          )}
 
           {/* Logout Trigger */}
           <button
