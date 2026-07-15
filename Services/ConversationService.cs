@@ -1010,5 +1010,139 @@ namespace AIChatBot.Services
                 }
             }
         }
+
+        public async Task<ChatResponse> ProcessTemporaryMessageAsync(
+            List<GroqMessage> chatHistory,
+            string model,
+            System.Func<string, System.Threading.Tasks.Task>? onStatusUpdate = null,
+            System.Func<string, System.Threading.Tasks.Task>? onChunkReceived = null,
+            CancellationToken cancellationToken = default)
+        {
+            // 1. Model Validation & fallback
+            var finalModel = model;
+            if (finalModel == "nexa-web-search")
+            {
+                finalModel = "llama-3.3-70b-versatile";
+            }
+
+            // 2. Identify if web search is needed
+            bool requiresSearch = model == "nexa-web-search";
+            var lastUserMessage = chatHistory.LastOrDefault(m => m.Role == "user")?.Content ?? "";
+
+            if (model != "nexa-web-search")
+            {
+                if (onStatusUpdate != null)
+                {
+                    await onStatusUpdate("Analyzing query...");
+                }
+                var decision = await _webSearchDecisionService.DecideAsync(lastUserMessage, cancellationToken);
+                requiresSearch = decision.RequiresSearch;
+            }
+
+            string searchResults = "";
+            if (requiresSearch)
+            {
+                if (onStatusUpdate != null)
+                {
+                    await onStatusUpdate("Searching the web...");
+                }
+                searchResults = await _tavilyService.SearchAsync(lastUserMessage, cancellationToken);
+            }
+
+            // 3. Make a copy of chat history to manipulate for Groq
+            var groqHistory = new List<GroqMessage>();
+
+            // Add system prompt if not present
+            bool hasSystemMessage = chatHistory.Any(m => m.Role.Equals("system", StringComparison.OrdinalIgnoreCase));
+            if (!hasSystemMessage)
+            {
+                groqHistory.Add(new GroqMessage
+                {
+                    Role = "system",
+                    Content = "You are Nexa AI assistant"
+                });
+            }
+
+            // Add the history passed from client
+            groqHistory.AddRange(chatHistory);
+
+            // Append retrieved search results if needed
+            if (requiresSearch && !string.IsNullOrWhiteSpace(searchResults))
+            {
+                // Inject search results right before the last user message
+                var lastMsg = groqHistory.LastOrDefault(m => m.Role == "user");
+                if (lastMsg != null)
+                {
+                    int lastIdx = groqHistory.LastIndexOf(lastMsg);
+                    groqHistory.Insert(lastIdx, new GroqMessage
+                    {
+                        Role = "system",
+                        Content = $"The following web search information was retrieved for the query:\n{searchResults}\nAnswer the user using this updated information."
+                    });
+                }
+                else
+                {
+                    groqHistory.Add(new GroqMessage
+                    {
+                        Role = "system",
+                        Content = $"The following web search information was retrieved for the query:\n{searchResults}\nAnswer the user using this updated information."
+                    });
+                }
+            }
+
+            // 4. Call Groq Service
+            string assistantContent = "";
+            int? promptTokens = 0;
+            int? completionTokens = 0;
+            int? totalTokens = 0;
+            bool isStopped = false;
+            var modelUsed = finalModel;
+
+            var partialContent = new System.Text.StringBuilder();
+            Action<string> chunkHandler = (chunk) =>
+            {
+                partialContent.Append(chunk);
+                if (onChunkReceived != null)
+                {
+                    onChunkReceived(chunk).GetAwaiter().GetResult();
+                }
+            };
+
+            try
+            {
+                var groqResponse = await _groqService.SendMessageAsync(
+                    groqHistory,
+                    finalModel,
+                    chunkHandler,
+                    cancellationToken);
+
+                assistantContent = groqResponse.Choices[0].Message.Content;
+                promptTokens = groqResponse.Usage?.PromptTokens;
+                completionTokens = groqResponse.Usage?.CompletionTokens;
+                totalTokens = groqResponse.Usage?.TotalTokens;
+                modelUsed = groqResponse.Model;
+            }
+            catch (OperationCanceledException)
+            {
+                isStopped = true;
+                _logger.LogWarning("Groq API call was cancelled.");
+                assistantContent = partialContent.ToString();
+            }
+
+            if (requiresSearch)
+            {
+                modelUsed += " + Search";
+            }
+
+            return new ChatResponse
+            {
+                Success = true,
+                Message = assistantContent,
+                Model = modelUsed,
+                TotalTokens = totalTokens ?? 0,
+                IsStopped = isStopped,
+                MessageId = 0 // Temporary chat doesn't save to DB
+            };
+        }
     }
 }

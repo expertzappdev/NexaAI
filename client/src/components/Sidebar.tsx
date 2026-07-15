@@ -21,7 +21,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     savedMessages,
     selectConversation,
     unsaveMessage,
-    setScrollToMessageId
+    setScrollToMessageId,
+    isTemporaryMode,
+    setIsTemporaryMode
   } = useChat();
   
   const [archivedExpanded, setArchivedExpanded] = useState(false);
@@ -34,7 +36,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   };
 
   const handleNewChat = async () => {
-    await createConversation("New Chat");
+    if (isTemporaryMode) {
+      setIsTemporaryMode(true); // Clears messages and keeps temporary mode active
+    } else {
+      await createConversation("New Chat");
+    }
     onClose(); // close drawer on mobile if open
   };
 
@@ -82,6 +88,27 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
+        {/* Toggle: Temporary Chat */}
+        <div className="px-4 pb-4">
+          <button
+            onClick={() => setIsTemporaryMode(!isTemporaryMode)}
+            className={`w-full flex items-center justify-between py-2.5 px-4 rounded-xl border transition-all focus:outline-none font-semibold text-xs ${
+              isTemporaryMode
+                ? 'bg-amber-500/10 border-amber-550/30 text-amber-450 shadow-[0_0_15px_rgba(245,158,11,0.1)]'
+                : 'bg-zinc-900/40 border-zinc-900 text-zinc-400 hover:text-zinc-350 hover:bg-zinc-900/80 hover:border-zinc-800'
+            }`}
+          >
+            <div className="flex items-center space-x-2">
+              <span className="text-sm">🕶</span>
+              <span>Temporary Chat</span>
+            </div>
+            {/* Sliding Switch */}
+            <div className={`w-7 h-4 rounded-full p-0.5 transition-colors duration-200 ${isTemporaryMode ? 'bg-amber-550' : 'bg-zinc-700'}`}>
+              <div className={`w-3 h-3 rounded-full bg-zinc-950 transition-transform duration-200 ${isTemporaryMode ? 'translate-x-3' : 'translate-x-0'}`} />
+            </div>
+          </button>
+        </div>
+
         {/* Search Bar */}
         <div className="px-4 pb-3">
           <div className="relative flex items-center">
@@ -90,8 +117,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search conversations..."
-              className="w-full pl-10 pr-9 py-2 text-xs rounded-xl bg-zinc-900/50 hover:bg-zinc-900 border border-zinc-900 hover:border-zinc-800 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30 text-zinc-200 placeholder-zinc-500 transition-all focus:outline-none"
+              disabled={isTemporaryMode}
+              placeholder={isTemporaryMode ? "Search disabled in Temporary Chat" : "Search conversations..."}
+              className={`w-full pl-10 pr-9 py-2 text-xs rounded-xl bg-zinc-900/50 border border-zinc-900 text-zinc-200 placeholder-zinc-500 transition-all focus:outline-none ${
+                isTemporaryMode
+                  ? 'opacity-40 cursor-not-allowed'
+                  : 'hover:bg-zinc-900 hover:border-zinc-800 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/30'
+              }`}
             />
             {searchQuery && (
               <button

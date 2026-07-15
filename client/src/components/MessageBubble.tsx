@@ -22,7 +22,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     editMessage, 
     isLoading,
     showToast,
-    toggleFeedback
+    toggleFeedback,
+    isTemporaryMode
   } = useChat();
 
   const isCurrentlyRegenerating = regeneratingMessageId === message.id;
@@ -127,7 +128,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
-              {editingMessageId === null && regeneratingMessageId === null && !isLoading && (
+              {editingMessageId === null && regeneratingMessageId === null && !isLoading && !isTemporaryMode && (
                 <button
                   onClick={() => {
                     setEditingMessageId(message.id);
@@ -152,14 +153,16 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
-              <button
-                onClick={() => regenerateResponse(message.id)}
-                disabled={regeneratingMessageId !== null}
-                className="p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-800 transition-all text-zinc-400 hover:text-zinc-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Regenerate response"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isCurrentlyRegenerating ? 'animate-spin text-indigo-400' : ''}`} />
-              </button>
+              {!isTemporaryMode && (
+                <button
+                  onClick={() => regenerateResponse(message.id)}
+                  disabled={regeneratingMessageId !== null}
+                  className="p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-800 transition-all text-zinc-400 hover:text-zinc-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Regenerate response"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isCurrentlyRegenerating ? 'animate-spin text-indigo-400' : ''}`} />
+                </button>
+              )}
             </div>
           )}
 
@@ -303,7 +306,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           </div>
 
           {/* Feedback Buttons */}
-          {!isUser && (
+          {!isUser && !isTemporaryMode && (
             <div className="flex items-center space-x-2 border-t border-zinc-850 mt-3 pt-2.5">
               <button
                 onClick={() => toggleFeedback(message.id, 'Like')}

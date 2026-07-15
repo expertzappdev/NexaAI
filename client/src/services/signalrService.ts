@@ -145,6 +145,13 @@ class SignalrService {
     await this.connection.invoke('SendMessage', conversationId, message, model);
   }
 
+  public async sendTemporaryMessage(chatHistory: { role: string; content: string }[], model: string): Promise<void> {
+    if (!this.connection || this.connection.state !== HubConnectionState.Connected) {
+      throw new Error('Cannot send temporary message. SignalR is not connected.');
+    }
+    await this.connection.invoke('SendTemporaryMessage', chatHistory, model);
+  }
+
   public async regenerateResponse(messageId: number, model: string): Promise<void> {
     if (!this.connection || this.connection.state !== HubConnectionState.Connected) {
       throw new Error('Cannot regenerate. SignalR is not connected.');
