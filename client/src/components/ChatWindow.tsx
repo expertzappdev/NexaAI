@@ -9,6 +9,7 @@ const ChatWindow: React.FC = () => {
   const { messages, isLoading, scrollToMessageId, setScrollToMessageId } = useChat();
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const lastScrollTimeRef = useRef<number>(0);
   const isNearBottomRef = useRef<boolean>(true);
 
   // Monitor user scrolling to detect if they scroll up away from the bottom
@@ -45,11 +46,15 @@ const ChatWindow: React.FC = () => {
 
     if (lastMessage.role === 'user') {
       // Force scroll to bottom when user sends a message
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
       isNearBottomRef.current = true;
     } else if (isNearBottomRef.current) {
-      // Keep scrolling down during streaming only if the user was already near the bottom
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      // Smooth continuous scroll with throttling to avoid browser jitter
+      const now = Date.now();
+      if (now - lastScrollTimeRef.current > 100) {
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+        lastScrollTimeRef.current = now;
+      }
     }
   }, [messages, isLoading, scrollToMessageId, setScrollToMessageId]);
 

@@ -81,6 +81,74 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     selectedModelRef.current = selectedModel;
   }, [selectedModel]);
 
+  // Typing effect refs for smooth streaming
+  const chunkQueueRef = useRef<string[]>([]);
+  const typingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const renderedTextRef = useRef<string>("");
+  const streamCompletedRef = useRef<boolean>(false);
+  const completionPayloadRef = useRef<any>(null);
+
+  const startTypingEffect = () => {
+    if (typingIntervalRef.current) return;
+
+    typingIntervalRef.current = setInterval(() => {
+      if (chunkQueueRef.current.length > 0) {
+        // Combined queued text
+        const fullQueueText = chunkQueueRef.current.join("");
+        
+        // Take approximately 2-3 words (around 10-14 characters)
+        const charsToTake = Math.min(12, fullQueueText.length);
+        const textToAppend = fullQueueText.substring(0, charsToTake);
+        const remainingText = fullQueueText.substring(charsToTake);
+        
+        chunkQueueRef.current = remainingText ? [remainingText] : [];
+        renderedTextRef.current += textToAppend;
+
+        setMessages((prev) => {
+          const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
+          if (lastMsgIndex !== -1) {
+            const updated = [...prev];
+            updated[lastMsgIndex] = {
+              ...updated[lastMsgIndex],
+              content: renderedTextRef.current,
+              isStreaming: true,
+            };
+            return updated;
+          }
+          return prev;
+        });
+      } else if (streamCompletedRef.current) {
+        // Finished receiving chunks and queue is completely drained
+        if (typingIntervalRef.current) {
+          clearInterval(typingIntervalRef.current);
+          typingIntervalRef.current = null;
+        }
+
+        const payload = completionPayloadRef.current;
+        setMessages((prev) => {
+          const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
+          if (lastMsgIndex !== -1) {
+            const updated = [...prev];
+            const lastMsg = updated[lastMsgIndex];
+            updated[lastMsgIndex] = {
+              ...lastMsg,
+              id: payload?.messageId || lastMsg.id,
+              content: payload?.content !== undefined ? payload.content : renderedTextRef.current,
+              isStreaming: false,
+              model: payload?.model || lastMsg.model,
+              totalTokens: payload?.totalTokens || lastMsg.totalTokens
+            };
+            return updated;
+          }
+          return prev;
+        });
+
+        setIsLoading(false);
+        setSearchStatus(null);
+      }
+    }, 60); // 60ms is right in the 40-80ms range for a natural typing pace
+  };
+
   // Handle SignalR connection lifecycle and event listeners
   useEffect(() => {
     if (token) {
@@ -116,32 +184,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const currentId = activeConversationIdRef.current;
           if (!currentId) return;
 
-          setMessages((prev) => {
-            const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
-            if (lastMsgIndex !== -1) {
-              const updated = [...prev];
-              const lastMsg = updated[lastMsgIndex];
-              updated[lastMsgIndex] = {
-                ...lastMsg,
-                content: lastMsg.content + chunk,
-                isStreaming: true,
-              };
-              return updated;
-            } else {
-              return [
-                ...prev,
-                {
-                  id: Date.now() + Math.random(),
-                  conversationId: currentId,
-                  role: 'assistant',
-                  content: chunk,
-                  createdAt: new Date().toISOString(),
-                  isStreaming: true,
-                  model: selectedModelRef.current
-                }
-              ];
-            }
-          });
+          // Push token chunk to queue and start typing ticker
+          chunkQueueRef.current.push(chunk);
+          startTypingEffect();
 
           // Touch update time of conversation in list
           setConversations((prev) =>
@@ -149,32 +194,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           );
         },
         (payload) => {
-          const currentId = activeConversationIdRef.current;
-          if (!currentId) return;
-
-          setMessages((prev) => {
-            const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
-            if (lastMsgIndex !== -1) {
-              const updated = [...prev];
-              const lastMsg = updated[lastMsgIndex];
-              updated[lastMsgIndex] = {
-                ...lastMsg,
-                id: payload.messageId || lastMsg.id,
-                content: payload.content !== undefined ? payload.content : lastMsg.content,
-                isStreaming: false,
-                model: payload.model || lastMsg.model,
-                totalTokens: payload.totalTokens || lastMsg.totalTokens
-              };
-              return updated;
-            }
-            return prev;
-          });
-
-          setIsLoading(false);
-          setSearchStatus(null);
+          // Record completion data and flag stream completion
+          completionPayloadRef.current = payload;
+          streamCompletedRef.current = true;
+          startTypingEffect();
         },
         () => {
           setIsLoading(true);
+          // Reset typing effect state
+          chunkQueueRef.current = [];
+          renderedTextRef.current = "";
+          streamCompletedRef.current = false;
+          completionPayloadRef.current = null;
+          if (typingIntervalRef.current) {
+            clearInterval(typingIntervalRef.current);
+            typingIntervalRef.current = null;
+          }
+
           const currentId = activeConversationIdRef.current;
           if (currentId) {
             setMessages((prev) => {
@@ -198,25 +234,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         },
         () => {
-          setIsLoading(false);
-          setSearchStatus(null);
-          setMessages((prev) => {
-            const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
-            if (lastMsgIndex !== -1 && prev[lastMsgIndex].isStreaming) {
-              const updated = [...prev];
-              updated[lastMsgIndex] = {
-                ...updated[lastMsgIndex],
-                isStreaming: false
-              };
-              return updated;
-            }
-            return prev;
-          });
+          // Typing/Streaming stopped natively or aborted
         },
         (errorMsg) => {
           showToast(errorMsg, 'error');
           setSearchStatus(null);
           setIsLoading(false);
+          if (typingIntervalRef.current) {
+            clearInterval(typingIntervalRef.current);
+            typingIntervalRef.current = null;
+          }
           setMessages((prev) => {
             const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
             if (lastMsgIndex !== -1) {
@@ -248,7 +275,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     return () => {
-      // Disconnect handled explicitly or when token resets to null
+      if (typingIntervalRef.current) {
+        clearInterval(typingIntervalRef.current);
+      }
     };
   }, [token]);
 
@@ -628,6 +657,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await socketService.stopGenerating();
     } catch (error) {
       console.error('Failed to stop generating via SignalR', error);
+    } finally {
+      if (typingIntervalRef.current) {
+        clearInterval(typingIntervalRef.current);
+        typingIntervalRef.current = null;
+      }
+      setIsLoading(false);
+      setSearchStatus(null);
+      setMessages((prev) => {
+        const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
+        if (lastMsgIndex !== -1) {
+          const updated = [...prev];
+          const lastMsg = updated[lastMsgIndex];
+          updated[lastMsgIndex] = {
+            ...lastMsg,
+            isStreaming: false,
+            content: lastMsg.content || 'Generation interrupted.'
+          };
+          return updated;
+        }
+        return prev;
+      });
     }
   };
 
