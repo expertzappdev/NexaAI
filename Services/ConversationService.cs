@@ -428,16 +428,7 @@ namespace AIChatBot.Services
                 searchResults = await _tavilyService.SearchAsync(content, cancellationToken);
             }
 
-            // Save User Message in Db first
-            var userMessage = new Message
-            {
-                ConversationId = conversationId,
-                Role = "user",
-                Content = content,
-                CreatedAt = DateTime.UtcNow
-            };
-            await _messageRepository.AddAsync(userMessage, cancellationToken);
-            await _messageRepository.SaveChangesAsync(cancellationToken);
+
 
             // 3. Build Groq Chat History
             var chatHistory = new List<GroqMessage>();
