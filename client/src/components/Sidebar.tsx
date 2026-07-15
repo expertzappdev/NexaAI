@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogOut, Plus, X, Pin, Search, Archive, ChevronDown, ChevronRight, Star } from 'lucide-react';
+import { LogOut, Plus, X, Pin, Search, Archive, ChevronDown, ChevronRight, Star, Keyboard } from 'lucide-react';
 import { useChat } from '../store/ChatContext';
 import ConversationItem from './ConversationItem';
 import { type SavedMessage } from '../types';
@@ -7,9 +7,10 @@ import { type SavedMessage } from '../types';
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  onShortcutClick: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onShortcutClick }) => {
   const {
     conversations,
     createConversation,
@@ -87,6 +88,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           <div className="relative flex items-center">
             <Search className="absolute left-3.5 w-4 h-4 text-zinc-500 pointer-events-none" />
             <input
+              id="conversation-search"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -234,11 +236,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Footer Layout: Logout + User Badge */}
-        <div className="p-4 border-t border-zinc-900 bg-zinc-950/80 space-y-3">
+        <div className="p-4 border-t border-zinc-900 bg-zinc-950/80 space-y-2.5">
+          {/* Keyboard Shortcuts Trigger */}
+          <button
+            onClick={onShortcutClick}
+            className="w-full flex items-center space-x-3 px-3 py-2 text-zinc-400 hover:text-zinc-200 transition-colors text-sm font-medium focus:outline-none cursor-pointer"
+          >
+            <Keyboard className="w-4.5 h-4.5 text-zinc-500" />
+            <span>Keyboard Shortcuts</span>
+          </button>
+
           {/* Logout Trigger */}
           <button
             onClick={logout}
-            className="w-full flex items-center space-x-3 px-3 py-2.5 text-zinc-400 hover:text-red-400 transition-colors text-sm font-medium focus:outline-none"
+            className="w-full flex items-center space-x-3 px-3 py-2 text-zinc-400 hover:text-red-405 transition-colors text-sm font-medium focus:outline-none cursor-pointer"
           >
             <LogOut className="w-4.5 h-4.5 text-zinc-500" />
             <span>Logout</span>

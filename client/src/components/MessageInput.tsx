@@ -1,10 +1,11 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { ArrowUp, Paperclip, Square } from 'lucide-react';
+import { ArrowUp, Paperclip, Square, CornerDownLeft } from 'lucide-react';
 import { useChat } from '../store/ChatContext';
 import ModelSelector from './ModelSelector';
 
 const MessageInput: React.FC = () => {
-  const { sendMessage, isLoading, stopGenerating } = useChat();
+  const { sendMessage, isLoading, stopGenerating, messages, setEditingMessageId } = useChat();
+  const [isMultilineDisabled, setIsMultilineDisabled] = useState(true);
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -52,7 +53,35 @@ const MessageInput: React.FC = () => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Ctrl+Enter always sends
+    if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault();
+      handleSend();
+      return;
+    }
+
+    // Arrow Up edits last user message when input is empty
+    if (e.key === 'ArrowUp' && text === '') {
+      e.preventDefault();
+      const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+      if (lastUserMsg) {
+        setEditingMessageId(lastUserMsg.id);
+      }
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // Shift+Enter inserts a new line (browser default behavior)
+        return;
+      }
+      
+      if (!isMultilineDisabled) {
+        // Multiline mode is enabled, Enter inserts a new line
+        return;
+      }
+
+      // Send on Enter (multiline disabled)
       e.preventDefault();
       handleSend();
     }
@@ -75,8 +104,21 @@ const MessageInput: React.FC = () => {
           <Paperclip className="w-4.5 h-4.5" />
         </button>
 
+        {/* Multiline Send Toggle */}
+        <button
+          type="button"
+          onClick={() => setIsMultilineDisabled(!isMultilineDisabled)}
+          title={isMultilineDisabled ? "Send on Enter (Shift+Enter for new line)" : "New line on Enter (Ctrl+Enter to send)"}
+          className={`p-2 mb-0.5 rounded-full hover:bg-zinc-800/40 transition-colors focus:outline-none cursor-pointer ${
+            isMultilineDisabled ? 'text-indigo-400 hover:text-indigo-300' : 'text-zinc-500 hover:text-zinc-350'
+          }`}
+        >
+          <CornerDownLeft className="w-4.5 h-4.5" />
+        </button>
+
         {/* Text area */}
         <textarea
+          id="chat-input-textarea"
           ref={textareaRef}
           rows={1}
           value={text}
