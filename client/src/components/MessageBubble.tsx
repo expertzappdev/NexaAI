@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Copy, Check, Brain, ChevronDown, ChevronUp, Star } from 'lucide-react';
+import { User, Copy, Check, Brain, ChevronDown, ChevronUp, RefreshCw, Edit2 } from 'lucide-react';
 import type { Message } from '../types';
 import MarkdownRenderer from './MarkdownRenderer';
 import { useChat } from '../store/ChatContext';
@@ -13,25 +13,19 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const { showToast, savedMessages, saveMessage, unsaveMessage, toggleFeedback } = useChat();
+  const { 
+    regeneratingMessageId, 
+    regenerateResponse, 
+    searchStatus, 
+    editingMessageId, 
+    setEditingMessageId, 
+    editMessage, 
+    isLoading 
+  } = useChat();
 
-  const isSaved = savedMessages.some((sm) => sm.messageId === message.id);
-
-  const handleSaveToggle = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (isSaving) return;
-    setIsSaving(true);
-    try {
-      if (isSaved) {
-        await unsaveMessage(message.id);
-      } else {
-        await saveMessage(message.id);
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  };
+  const isCurrentlyRegenerating = regeneratingMessageId === message.id;
+  const isEditingThisMessage = editingMessageId === message.id;
+  const [editText, setEditText] = useState(message.content);
 
   const handleCopy = async () => {
     try {
@@ -106,40 +100,54 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             ? 'bg-gradient-to-tr from-blue-600 to-purple-600 border-indigo-500/25 text-white rounded-tr-none shadow-purple-600/5' 
             : 'bg-zinc-900/40 backdrop-blur-md border-zinc-800/80 text-zinc-150 rounded-tl-none'
         }`}>
-          {/* Action Buttons (visible on hover) */}
-          {isUser ? (
-            <button
-              onClick={handleCopy}
-              className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-indigo-900/60 hover:bg-indigo-900 transition-all text-zinc-250 hover:text-white focus:outline-none focus:opacity-100"
-              title="Copy message"
-            >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            </button>
-          ) : (
-            <div className="absolute top-2.5 right-2.5 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-              {/* Save Button */}
-              <button
-                onClick={handleSaveToggle}
-                disabled={isSaving}
-                className="p-1.5 rounded-lg bg-zinc-850 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-amber-400 transition-all focus:outline-none focus:opacity-100"
-                title={isSaved ? "Remove from saved" : "Save response"}
-              >
-                <Star className={`w-3.5 h-3.5 ${isSaved ? 'fill-amber-400 text-amber-400' : ''}`} />
-              </button>
-              
-              {/* Copy Button */}
+          {/* Action Toolbar for User Message (visible on hover) */}
+          {isUser && !isEditingThisMessage && (
+            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 flex items-center space-x-1.5 transition-all focus-within:opacity-100">
               <button
                 onClick={handleCopy}
-                className="p-1.5 rounded-lg bg-zinc-850 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-all focus:outline-none focus:opacity-100"
+                className="p-1.5 rounded-lg bg-indigo-900/60 hover:bg-indigo-900 transition-all text-zinc-200 hover:text-white focus:outline-none focus:opacity-100"
+                title="Copy message"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+              {editingMessageId === null && regeneratingMessageId === null && !isLoading && (
+                <button
+                  onClick={() => {
+                    setEditingMessageId(message.id);
+                    setEditText(message.content);
+                  }}
+                  className="p-1.5 rounded-lg bg-indigo-900/60 hover:bg-indigo-900 transition-all text-zinc-200 hover:text-white focus:outline-none focus:opacity-100"
+                  title="Edit message"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Action Toolbar for AI Message (visible on hover) */}
+          {!isUser && (
+            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 flex items-center space-x-1.5 transition-all focus-within:opacity-100">
+              <button
+                onClick={handleCopy}
+                className="p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-800 transition-all text-zinc-400 hover:text-zinc-200 focus:outline-none"
                 title="Copy response"
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                onClick={() => regenerateResponse(message.id)}
+                disabled={regeneratingMessageId !== null}
+                className="p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-800 transition-all text-zinc-400 hover:text-zinc-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Regenerate response"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isCurrentlyRegenerating ? 'animate-spin text-indigo-400' : ''}`} />
               </button>
             </div>
           )}
 
           {/* Thinking Block Section */}
-          {!isUser && thinking && (
+          {!isUser && thinking && !isCurrentlyRegenerating && (
             <div className="mb-3.5 border-b border-zinc-800/80 pb-3">
               <button
                 onClick={() => setShowThinking(!showThinking)}
@@ -165,9 +173,67 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
           {/* Text Content */}
           {isUser ? (
-            <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+            isEditingThisMessage ? (
+              <div className="flex flex-col space-y-2 mt-1 min-w-[240px] sm:min-w-[320px]">
+                <textarea
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  className="w-full min-h-[80px] p-2.5 rounded-xl bg-black/30 border border-white/10 text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/50 resize-y"
+                  placeholder="Edit your message..."
+                  disabled={isLoading || regeneratingMessageId !== null}
+                />
+                <div className="flex justify-end space-x-2">
+                  <button
+                    onClick={() => {
+                      setEditingMessageId(null);
+                      setEditText(message.content);
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!editText.trim()) return;
+                      await editMessage(message.id, editText.trim());
+                    }}
+                    disabled={!editText.trim() || isLoading || regeneratingMessageId !== null}
+                    className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+            )
+          ) : isCurrentlyRegenerating ? (
+            <div className="flex items-center space-x-2.5 py-2">
+              <span className="text-xs text-zinc-450 font-medium">
+                {searchStatus ? (
+                  <span className="flex items-center gap-1.5 text-blue-400">
+                    🌐 {searchStatus}
+                  </span>
+                ) : (
+                  'Regenerating response'
+                )}
+              </span>
+              <div className="flex space-x-1 items-center h-2">
+                <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full dot-anim"></span>
+                <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full dot-anim"></span>
+                <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full dot-anim"></span>
+              </div>
+            </div>
           ) : (
-            cleanContent && <MarkdownRenderer content={cleanContent} isStreaming={message.isStreaming} />
+            <>
+              {cleanContent && <MarkdownRenderer content={cleanContent} />}
+              {message.isStopped && (
+                <div className="mt-2 text-[10px] text-zinc-550 bg-zinc-950/40 border border-zinc-800/60 px-2.5 py-1 rounded-lg w-max flex items-center gap-1.5 font-medium select-none">
+                  <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full"></span>
+                  Generation stopped
+                </div>
+              )}
+            </>
           )}
 
           {/* Bubble Footer (Time and Analytics) */}
@@ -175,6 +241,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             isUser ? 'justify-end text-zinc-200/85' : 'justify-start text-zinc-500'
           }`}>
             <span>{formatTime(message.createdAt)}</span>
+            {message.isEdited && (
+              <span className="italic text-zinc-400/90 font-medium tracking-tight font-sans text-[8px] uppercase select-none">
+                • Edited
+              </span>
+            )}
             
             {/* Display Token and Model info for AI assistant response */}
             {!isUser && message.model && (() => {

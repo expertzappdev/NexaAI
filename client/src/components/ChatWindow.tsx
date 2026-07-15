@@ -75,7 +75,7 @@ const ChatWindow: React.FC = () => {
             ))}
 
             {/* AI thinking state */}
-            {isLoading && (
+            {isLoading && !messages.some(m => (m.isStreaming && m.content.length > 0) || m.id === regeneratingMessageId) && (
               <TypingIndicator />
             )}
 

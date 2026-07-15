@@ -34,6 +34,7 @@ namespace AIChatBot.Services
         public async Task<GroqResponse> SendMessageAsync(
             List<GroqMessage> chatHistory,
             string? modelOverride = null,
+            Action<string>? onChunkReceived = null,
             CancellationToken cancellationToken = default)
         {
             var stopwatch = Stopwatch.StartNew();
@@ -43,7 +44,8 @@ namespace AIChatBot.Services
             var requestBody = new GroqRequest
             {
                 Model = model,
-                Messages = chatHistory
+                Messages = chatHistory,
+                Stream = onChunkReceived != null
             };
 
             var jsonContent = JsonSerializer.Serialize(requestBody);
@@ -57,39 +59,127 @@ namespace AIChatBot.Services
             // Headers
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
 
-            _logger.LogInformation("Sending chat request to Groq. Model: {Model}. History size: {Count} messages.", 
-                model, chatHistory.Count);
+            _logger.LogInformation("Sending chat request to Groq. Model: {Model}. History size: {Count} messages. Streaming: {Stream}", 
+                model, chatHistory.Count, requestBody.Stream);
 
             try
             {
-                var response = await client.SendAsync(request, cancellationToken);
+                if (onChunkReceived != null)
+                {
+                    var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                    stopwatch.Stop();
+
+                    _logger.LogInformation("Groq stream headers completed in {ElapsedMs}ms with Status Code: {StatusCode}", 
+                        stopwatch.ElapsedMilliseconds, response.StatusCode);
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                        _logger.LogError("Groq API returned error. Status: {Status}. Body: {Body}", 
+                            response.StatusCode, responseBody);
+
+                        if (response.StatusCode == HttpStatusCode.Unauthorized)
+                        {
+                            throw new UnauthorizedAccessException("Groq API key is invalid or unauthorized.");
+                        }
+
+                        if ((int)response.StatusCode == 429)
+                        {
+                            throw new HttpRequestException("Groq API rate limit exceeded.", null, HttpStatusCode.TooManyRequests);
+                        }
+
+                        throw new HttpRequestException($"Groq API request failed with status code {response.StatusCode}.", null, response.StatusCode);
+                    }
+
+                    using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                    using var reader = new System.IO.StreamReader(stream);
+                    string? line;
+                    var fullContent = new StringBuilder();
+                    var streamOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    string lastChoiceId = Guid.NewGuid().ToString();
+
+                    while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (line.StartsWith("data: "))
+                        {
+                            var data = line.Substring(6).Trim();
+                            if (data == "[DONE]")
+                                break;
+
+                            try
+                            {
+                                var chunk = JsonSerializer.Deserialize<GroqStreamChunk>(data, streamOptions);
+                                if (chunk != null)
+                                {
+                                    if (!string.IsNullOrEmpty(chunk.Id))
+                                    {
+                                        lastChoiceId = chunk.Id;
+                                    }
+
+                                    var text = chunk.Choices?[0]?.Delta?.Content;
+                                    if (!string.IsNullOrEmpty(text))
+                                    {
+                                        fullContent.Append(text);
+                                        onChunkReceived(text);
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                // ignore parse exceptions
+                            }
+                        }
+                    }
+
+                    return new GroqResponse
+                    {
+                        Id = lastChoiceId,
+                        Choices = new List<GroqChoice>
+                        {
+                            new GroqChoice
+                            {
+                                Message = new GroqMessage { Role = "assistant", Content = fullContent.ToString() }
+                            }
+                        },
+                        Usage = new GroqUsage
+                        {
+                            PromptTokens = 0,
+                            CompletionTokens = 0,
+                            TotalTokens = 0
+                        },
+                        Model = model
+                    };
+                }
+
+                var responseNormal = await client.SendAsync(request, cancellationToken);
                 stopwatch.Stop();
 
                 _logger.LogInformation("Groq request completed in {ElapsedMs}ms with Status Code: {StatusCode}", 
-                    stopwatch.ElapsedMilliseconds, response.StatusCode);
+                    stopwatch.ElapsedMilliseconds, responseNormal.StatusCode);
 
-                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                var responseBodyNormal = await responseNormal.Content.ReadAsStringAsync(cancellationToken);
 
-                if (!response.IsSuccessStatusCode)
+                if (!responseNormal.IsSuccessStatusCode)
                 {
                     _logger.LogError("Groq API returned error. Status: {Status}. Body: {Body}", 
-                        response.StatusCode, responseBody);
+                        responseNormal.StatusCode, responseBodyNormal);
 
-                    if (response.StatusCode == HttpStatusCode.Unauthorized)
+                    if (responseNormal.StatusCode == HttpStatusCode.Unauthorized)
                     {
                         throw new UnauthorizedAccessException("Groq API key is invalid or unauthorized.");
                     }
 
-                    if ((int)response.StatusCode == 429)
+                    if ((int)responseNormal.StatusCode == 429)
                     {
                         throw new HttpRequestException("Groq API rate limit exceeded.", null, HttpStatusCode.TooManyRequests);
                     }
 
-                    throw new HttpRequestException($"Groq API request failed with status code {response.StatusCode}.", null, response.StatusCode);
+                    throw new HttpRequestException($"Groq API request failed with status code {responseNormal.StatusCode}.", null, responseNormal.StatusCode);
                 }
 
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var result = JsonSerializer.Deserialize<GroqResponse>(responseBody, options);
+                var normalOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var result = JsonSerializer.Deserialize<GroqResponse>(responseBodyNormal, normalOptions);
 
                 if (result == null || result.Choices == null || result.Choices.Count == 0)
                 {
@@ -112,103 +202,12 @@ namespace AIChatBot.Services
             }
         }
 
-        public async IAsyncEnumerable<GroqStreamResponse> SendMessageStreamAsync(
+        public Task<GroqResponse> SendMessageAsync(
             List<GroqMessage> chatHistory,
-            string? modelOverride = null,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            string? modelOverride,
+            CancellationToken cancellationToken)
         {
-            var client = _httpClientFactory.CreateClient("GroqClient");
-
-            var model = modelOverride ?? _settings.DefaultModel;
-            var requestBody = new
-            {
-                model = model,
-                messages = chatHistory,
-                stream = true,
-                stream_options = new { include_usage = true }
-            };
-
-            var jsonContent = JsonSerializer.Serialize(requestBody);
-            var httpContent = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
-            var request = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
-            {
-                Content = httpContent
-            };
-
-            // Headers
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.ApiKey);
-
-            _logger.LogInformation("Sending streaming chat request to Groq. Model: {Model}. History size: {Count} messages.", 
-                model, chatHistory.Count);
-
-            HttpResponseMessage response;
-            try
-            {
-                response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to connect to Groq API for streaming.");
-                throw;
-            }
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-                _logger.LogError("Groq API returned error for streaming. Status: {Status}. Body: {Body}", 
-                    response.StatusCode, responseBody);
-
-                if (response.StatusCode == HttpStatusCode.Unauthorized)
-                {
-                    throw new UnauthorizedAccessException("Groq API key is invalid or unauthorized.");
-                }
-
-                if ((int)response.StatusCode == 429)
-                {
-                    throw new HttpRequestException("Groq API rate limit exceeded.", null, HttpStatusCode.TooManyRequests);
-                }
-
-                throw new HttpRequestException($"Groq API request failed with status code {response.StatusCode}.", null, response.StatusCode);
-            }
-
-            using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken))
-            using (var reader = new System.IO.StreamReader(stream))
-            {
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-
-                while (!reader.EndOfStream)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    var line = await reader.ReadLineAsync();
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-
-                    if (line.StartsWith("data: "))
-                    {
-                        var data = line.Substring(6).Trim();
-                        if (data == "[DONE]")
-                        {
-                            break;
-                        }
-
-                        GroqStreamResponse? chunk = null;
-                        try
-                        {
-                            chunk = JsonSerializer.Deserialize<GroqStreamResponse>(data, options);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Failed to deserialize Groq stream chunk: {Data}", data);
-                        }
-
-                        if (chunk != null)
-                        {
-                            yield return chunk;
-                        }
-                    }
-                }
-            }
+            return SendMessageAsync(chatHistory, modelOverride, null, cancellationToken);
         }
     }
 }

@@ -16,6 +16,11 @@ namespace AIChatBot.Entities
         public string? Model { get; set; }
         
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        
+        public bool IsEdited { get; set; } = false;
+        public DateTime? EditedAt { get; set; }
+        
+        public bool IsStopped { get; set; } = false;
 
         // Navigation properties
         public Conversation? Conversation { get; set; }

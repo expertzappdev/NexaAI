@@ -8,6 +8,7 @@ namespace AIChatBot.Models.Responses
         // Optional tracking properties
         public string? Model { get; set; }
         public int? TotalTokens { get; set; }
-        public int? Id { get; set; }
+        public bool IsStopped { get; set; }
+        public int MessageId { get; set; }
     }
 }

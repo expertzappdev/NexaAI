@@ -65,5 +65,22 @@ namespace AIChatBot.Services
             System.Func<string, System.Threading.Tasks.Task>? onStatusUpdate = null,
             System.Func<string, System.Threading.Tasks.Task>? onChunkReceived = null,
             CancellationToken cancellationToken = default);
+
+        Task<ChatResponse> RegenerateResponseAsync(
+            int userId,
+            int messageId,
+            string currentModel,
+            System.Func<string, System.Threading.Tasks.Task>? onStatusUpdate = null,
+            System.Func<string, System.Threading.Tasks.Task>? onChunkReceived = null,
+            CancellationToken cancellationToken = default);
+
+        Task<ChatResponse> EditMessageAsync(
+            int userId,
+            int messageId,
+            string newContent,
+            string currentModel,
+            System.Func<string, System.Threading.Tasks.Task>? onStatusUpdate = null,
+            System.Func<string, System.Threading.Tasks.Task>? onChunkReceived = null,
+            CancellationToken cancellationToken = default);
     }
 }

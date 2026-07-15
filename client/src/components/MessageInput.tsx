@@ -1,10 +1,10 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { ArrowUp, Paperclip } from 'lucide-react';
+import { ArrowUp, Paperclip, Square } from 'lucide-react';
 import { useChat } from '../store/ChatContext';
 import ModelSelector from './ModelSelector';
 
 const MessageInput: React.FC = () => {
-  const { sendMessage, stopGenerating, isLoading } = useChat();
+  const { sendMessage, isLoading, stopGenerating } = useChat();
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -91,16 +91,14 @@ const MessageInput: React.FC = () => {
           <ModelSelector />
         </div>
 
-        {/* Send / Stop Generating Button */}
+        {/* Circular Send / Stop Button */}
         {isLoading ? (
           <button
-            type="button"
-            onClick={handleStop}
-            className="flex items-center justify-center w-9.5 h-9.5 rounded-full mb-0.5 transition-all focus:outline-none bg-red-600 hover:bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.35)] hover:scale-105"
+            onClick={stopGenerating}
             title="Stop Generating"
+            className="flex items-center justify-center w-9.5 h-9.5 rounded-full mb-0.5 transition-all focus:outline-none bg-red-650 hover:bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.35)]"
           >
-            {/* Square Stop Icon */}
-            <div className="w-3 h-3 bg-zinc-100 rounded-sm"></div>
+            <Square className="w-4 h-4 fill-white text-white" />
           </button>
         ) : (
           <button
@@ -108,7 +106,7 @@ const MessageInput: React.FC = () => {
             disabled={!text.trim()}
             className={`flex items-center justify-center w-9.5 h-9.5 rounded-full mb-0.5 transition-all focus:outline-none ${
               text.trim()
-                ? 'bg-gradient-to-tr from-blue-600 to-purple-600 text-white shadow-[0_0_15px_rgba(139,92,246,0.35)] hover:brightness-110 hover:scale-105'
+                ? 'bg-gradient-to-tr from-blue-600 to-purple-600 text-white shadow-[0_0_15px_rgba(139,92,246,0.35)] hover:brightness-110'
                 : 'bg-zinc-800 text-zinc-650 cursor-not-allowed'
             }`}
           >

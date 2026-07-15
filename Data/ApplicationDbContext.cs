@@ -61,6 +61,9 @@ namespace AIChatBot.Data
                 entity.Property(e => e.Content).IsRequired().HasColumnType("longtext");
                 entity.Property(e => e.Model).HasMaxLength(150);
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP(6)");
+                entity.Property(e => e.IsEdited).HasDefaultValue(false);
+                entity.Property(e => e.EditedAt).IsRequired(false);
+                entity.Property(e => e.IsStopped).HasDefaultValue(false);
 
                 // Relationship: Conversation (1) -> Messages (Many)
                 entity.HasOne(m => m.Conversation)

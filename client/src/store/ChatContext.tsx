@@ -43,13 +43,12 @@ interface ChatContextType {
   loadArchivedConversations: () => Promise<void>;
   archiveConversation: (id: number) => Promise<boolean>;
   restoreConversation: (id: number) => Promise<boolean>;
-  savedMessages: SavedMessage[];
-  loadSavedMessages: () => Promise<void>;
-  saveMessage: (messageId: number) => Promise<boolean>;
-  unsaveMessage: (messageId: number) => Promise<boolean>;
-  scrollToMessageId: number | null;
-  setScrollToMessageId: (id: number | null) => void;
-  toggleFeedback: (messageId: number, type: 'Like' | 'Dislike') => Promise<boolean>;
+  regeneratingMessageId: number | null;
+  regenerateResponse: (messageId: number) => Promise<void>;
+  editingMessageId: number | null;
+  setEditingMessageId: (id: number | null) => void;
+  editMessage: (messageId: number, content: string) => Promise<void>;
+  stopGenerating: () => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -68,10 +67,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
-  const [savedMessages, setSavedMessages] = useState<SavedMessage[]>([]);
-  const [scrollToMessageId, setScrollToMessageId] = useState<number | null>(null);
+  const [regeneratingMessageId, setRegeneratingMessageId] = useState<number | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
 
-  // Store activeConversationId and selectedModel in refs to avoid stale closures in socket event handlers
+  // Store activeConversationId, regeneratingMessageId, and editingMessageId in refs to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
   const selectedModelRef = useRef<string>(selectedModel);
   useEffect(() => {
@@ -149,29 +148,75 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 60); // 60ms is right in the 40-80ms range for a natural typing pace
   };
 
+  const regeneratingMessageIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    regeneratingMessageIdRef.current = regeneratingMessageId;
+  }, [regeneratingMessageId]);
+
+  const editingMessageIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    editingMessageIdRef.current = editingMessageId;
+  }, [editingMessageId]);
+
   // Handle SignalR connection lifecycle and event listeners
   useEffect(() => {
     if (token) {
       socketService.connect(
         token,
         (msg) => {
-          // Verify if message belongs to active conversation
           const currentId = activeConversationIdRef.current;
           
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: Date.now() + Math.random(),
-              conversationId: currentId || 0,
-              role: msg.role as 'system' | 'user' | 'assistant',
-              content: msg.content,
-              createdAt: msg.createdAt,
-              model: msg.model,
-              totalTokens: msg.totalTokens,
-            },
-          ]);
+          if (msg.role === 'user') {
+            setMessages((prev) => {
+              if (prev.some(m => m.content === msg.content && m.role === 'user' && Math.abs(new Date(m.createdAt).getTime() - new Date(msg.createdAt).getTime()) < 10000)) {
+                return prev;
+              }
+              return [
+                ...prev,
+                {
+                  id: msg.id || (Date.now() + Math.random()),
+                  conversationId: currentId || 0,
+                  role: 'user',
+                  content: msg.content,
+                  createdAt: msg.createdAt
+                }
+              ];
+            });
+            return;
+          }
 
-          setSearchStatus(null); // Clear search status when message is received
+          setMessages((prev) => {
+            const placeholderExists = prev.some(m => m.id === 999999);
+            if (placeholderExists) {
+              return prev.map(m => m.id === 999999 ? {
+                ...m,
+                id: msg.id || (Date.now() + Math.random()),
+                role: 'assistant',
+                content: msg.content,
+                createdAt: msg.createdAt,
+                model: msg.model,
+                totalTokens: msg.totalTokens,
+                isStopped: msg.isStopped,
+                isStreaming: false
+              } : m);
+            }
+            return [
+              ...prev,
+              {
+                id: msg.id || (Date.now() + Math.random()),
+                conversationId: currentId || 0,
+                role: 'assistant',
+                content: msg.content,
+                createdAt: msg.createdAt,
+                model: msg.model,
+                totalTokens: msg.totalTokens,
+                isStopped: msg.isStopped,
+                isStreaming: false
+              }
+            ];
+          });
+
+          setSearchStatus(null);
 
           // Touch update time of conversation in list
           if (currentId) {
@@ -201,22 +246,71 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         () => {
           setIsLoading(true);
-          // Reset typing effect state
-          chunkQueueRef.current = [];
-          renderedTextRef.current = "";
-          streamCompletedRef.current = false;
-          completionPayloadRef.current = null;
-          if (typingIntervalRef.current) {
-            clearInterval(typingIntervalRef.current);
-            typingIntervalRef.current = null;
-          }
+          const currentId = activeConversationIdRef.current;
+          const editId = editingMessageIdRef.current;
+          const regenId = regeneratingMessageIdRef.current;
 
+          if (regenId !== null) {
+            setMessages((prev) => prev.map((m) => m.id === regenId ? { ...m, content: '', isStreaming: true, isStopped: false } : m));
+          } else if (editId !== null) {
+            setMessages((prev) => {
+              const idx = prev.findIndex((m) => m.id === editId);
+              if (idx === -1) return prev;
+              const truncated = prev.slice(0, idx + 1);
+              return [
+                ...truncated,
+                {
+                  id: 999999,
+                  conversationId: currentId || 0,
+                  role: 'assistant',
+                  content: '',
+                  createdAt: new Date().toISOString(),
+                  isStreaming: true
+                }
+              ];
+            });
+          } else if (currentId !== null) {
+            setMessages((prev) => {
+              if (prev.some(m => m.id === 999999)) return prev;
+              return [
+                ...prev,
+                {
+                  id: 999999,
+                  conversationId: currentId,
+                  role: 'assistant',
+                  content: '',
+                  createdAt: new Date().toISOString(),
+                  isStreaming: true
+                }
+              ];
+            });
+          }
+        },
+        () => {
+          setIsLoading(false);
+          setSearchStatus(null);
+          setRegeneratingMessageId(null);
+          setEditingMessageId(null);
+          setMessages((prev) => prev.map((m) => m.isStreaming ? { ...m, isStreaming: false } : m));
+        },
+        (errorMsg) => {
+          showToast(errorMsg, 'error');
+          setSearchStatus(null);
+          setRegeneratingMessageId(null);
+          setEditingMessageId(null);
+          setMessages((prev) => prev.map((m) => m.isStreaming ? { ...m, isStreaming: false } : m));
+          // Append error message to screen if no placeholder exists
           const currentId = activeConversationIdRef.current;
           if (currentId) {
             setMessages((prev) => {
-              const lastMsg = prev[prev.length - 1];
-              if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
-                return prev;
+              const placeholderIdx = prev.findIndex(m => m.id === 999999);
+              if (placeholderIdx !== -1) {
+                return prev.map(m => m.id === 999999 ? {
+                  ...m,
+                  id: Date.now() + Math.random(),
+                  content: `Error: ${errorMsg}`,
+                  isStreaming: false
+                } : m);
               }
               return [
                 ...prev,
@@ -224,25 +318,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   id: Date.now() + Math.random(),
                   conversationId: currentId,
                   role: 'assistant',
-                  content: '',
+                  content: `Error: ${errorMsg}`,
                   createdAt: new Date().toISOString(),
-                  isStreaming: true,
-                  model: selectedModelRef.current
-                }
+                },
               ];
             });
-          }
-        },
-        () => {
-          // Typing/Streaming stopped natively or aborted
-        },
-        (errorMsg) => {
-          showToast(errorMsg, 'error');
-          setSearchStatus(null);
-          setIsLoading(false);
-          if (typingIntervalRef.current) {
-            clearInterval(typingIntervalRef.current);
-            typingIntervalRef.current = null;
           }
           setMessages((prev) => {
             const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
@@ -264,6 +344,65 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         (status) => {
           setSearchStatus(status);
+        },
+        (payload) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === payload.messageId
+                ? {
+                    ...m,
+                    content: payload.content,
+                    model: payload.model,
+                    totalTokens: payload.totalTokens,
+                    isStopped: payload.isStopped,
+                    isStreaming: false
+                  }
+                : m
+            )
+          );
+          setRegeneratingMessageId(null);
+        },
+        (payload) => {
+          setMessages((prev) => {
+            const idx = prev.findIndex((m) => m.id === payload.editedMessageId);
+            if (idx === -1) return prev;
+            
+            const truncated = prev.slice(0, idx + 1);
+            truncated[idx] = {
+              ...truncated[idx],
+              content: payload.newContent,
+              isEdited: true,
+              editedAt: payload.editedAt
+            };
+            
+            const assistantResponse = {
+              id: payload.assistantResponse.id || (Date.now() + Math.random()),
+              conversationId: truncated[idx].conversationId,
+              role: 'assistant' as const,
+              content: payload.assistantResponse.content,
+              createdAt: payload.assistantResponse.createdAt,
+              model: payload.assistantResponse.model,
+              totalTokens: payload.assistantResponse.totalTokens,
+              isStopped: payload.assistantResponse.isStopped,
+              isStreaming: false
+            };
+
+            return [...truncated, assistantResponse];
+          });
+          setEditingMessageId(null);
+        },
+        (chunk) => {
+          setMessages((prev) => {
+            const regenId = regeneratingMessageIdRef.current;
+            if (regenId !== null) {
+              return prev.map((m) =>
+                m.id === regenId ? { ...m, content: m.content + chunk, isStreaming: true } : m
+              );
+            }
+            return prev.map((m) =>
+              m.id === 999999 ? { ...m, content: m.content + chunk, isStreaming: true } : m
+            );
+          });
         }
       ).catch((err) => {
         console.error('SignalR init connection failure:', err);
@@ -652,32 +791,41 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const regenerateResponse = async (messageId: number) => {
+    if (regeneratingMessageId !== null) return;
+    setRegeneratingMessageId(messageId);
+    try {
+      await socketService.regenerateResponse(messageId, selectedModel);
+    } catch (error) {
+      console.error('Failed to regenerate response via SignalR', error);
+      showToast('Failed to regenerate response.', 'error');
+      setRegeneratingMessageId(null);
+    }
+  };
+
+  const editMessage = async (messageId: number, content: string) => {
+    if (isLoading) return;
+    setEditingMessageId(messageId);
+    try {
+      await socketService.editMessage(messageId, content, selectedModel);
+    } catch (error) {
+      console.error('Failed to edit message via SignalR', error);
+      showToast('Failed to edit message.', 'error');
+      setEditingMessageId(null);
+    }
+  };
+
   const stopGenerating = async () => {
     try {
       await socketService.stopGenerating();
-    } catch (error) {
-      console.error('Failed to stop generating via SignalR', error);
-    } finally {
-      if (typingIntervalRef.current) {
-        clearInterval(typingIntervalRef.current);
-        typingIntervalRef.current = null;
-      }
       setIsLoading(false);
       setSearchStatus(null);
-      setMessages((prev) => {
-        const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
-        if (lastMsgIndex !== -1) {
-          const updated = [...prev];
-          const lastMsg = updated[lastMsgIndex];
-          updated[lastMsgIndex] = {
-            ...lastMsg,
-            isStreaming: false,
-            content: lastMsg.content || 'Generation interrupted.'
-          };
-          return updated;
-        }
-        return prev;
-      });
+      setRegeneratingMessageId(null);
+      setEditingMessageId(null);
+      setMessages((prev) => prev.map((m) => m.isStreaming ? { ...m, isStreaming: false } : m));
+      showToast('Generation stopped', 'info');
+    } catch (error) {
+      console.error('Failed to stop generating', error);
     }
   };
 
@@ -718,13 +866,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loadArchivedConversations,
         archiveConversation,
         restoreConversation,
-        savedMessages,
-        loadSavedMessages,
-        saveMessage,
-        unsaveMessage,
-        scrollToMessageId,
-        setScrollToMessageId,
-        toggleFeedback,
+        regeneratingMessageId,
+        regenerateResponse,
+        editingMessageId,
+        setEditingMessageId,
+        editMessage,
+        stopGenerating,
       }}
     >
       {children}

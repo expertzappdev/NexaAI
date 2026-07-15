@@ -27,6 +27,10 @@ export interface Message {
   completionTokens?: number;
   totalTokens?: number;
   model?: string;
+  isEdited?: boolean;
+  editedAt?: string;
+  isStopped?: boolean;
+  isStreaming?: boolean;
   createdAt: string;
   feedbackType?: 'Like' | 'Dislike' | null;
   isStreaming?: boolean;
@@ -48,6 +52,8 @@ export interface ChatResponse {
   message: string;
   model?: string;
   totalTokens?: number;
+  isStopped?: boolean;
+  messageId?: number;
 }
 
 export interface SavedMessage {
