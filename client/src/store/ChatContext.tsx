@@ -83,7 +83,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Typing effect refs for smooth streaming
   const chunkQueueRef = useRef<string[]>([]);
-  const typingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const typingIntervalRef = useRef<any>(null);
   const renderedTextRef = useRef<string>("");
   const streamCompletedRef = useRef<boolean>(false);
   const completionPayloadRef = useRef<any>(null);
