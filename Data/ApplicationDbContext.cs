@@ -14,6 +14,7 @@ namespace AIChatBot.Data
         public DbSet<Message> Messages => Set<Message>();
         public DbSet<SavedMessage> SavedMessages => Set<SavedMessage>();
         public DbSet<MessageFeedback> MessageFeedbacks => Set<MessageFeedback>();
+        public DbSet<UserMemory> UserMemories => Set<UserMemory>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -113,6 +114,24 @@ namespace AIChatBot.Data
                     .OnDelete(DeleteBehavior.Cascade);
 
                 entity.HasIndex(e => new { e.UserId, e.MessageId }).IsUnique();
+            });
+
+            modelBuilder.Entity<UserMemory>(entity =>
+            {
+                entity.ToTable("UserMemories");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.Content).IsRequired().HasColumnType("text");
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP(6)");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP(6)")
+                    .ValueGeneratedOnAddOrUpdate();
+
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(e => e.UserId);
             });
         }
     }

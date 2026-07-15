@@ -311,5 +311,82 @@ namespace AIChatBot.Hubs
                 await Clients.Caller.SendAsync("TypingStopped");
             }
         }
+
+        public async Task SendTemporaryMessage(System.Collections.Generic.List<AIChatBot.Services.GroqMessage> chatHistory, string model)
+        {
+            var cts = new CancellationTokenSource();
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, Context.ConnectionAborted);
+            _activeRequests[Context.ConnectionId] = cts;
+
+            try
+            {
+                if (chatHistory == null || chatHistory.Count == 0)
+                {
+                    await Clients.Caller.SendAsync("ErrorMessage", "Chat history cannot be empty.");
+                    return;
+                }
+
+                // Model Validation
+                if (string.IsNullOrWhiteSpace(model))
+                {
+                    model = "llama-3.1-8b-instant";
+                }
+
+                var allowedModels = new System.Collections.Generic.HashSet<string>
+                {
+                    "llama-3.1-8b-instant",
+                    "llama-3.3-70b-versatile",
+                    "qwen/qwen3.6-27b",
+                    "qwen/qwen3-32b",
+                    "groq/compound-mini",
+                    "groq/compound",
+                    "nexa-web-search"
+                };
+
+                if (!allowedModels.Contains(model))
+                {
+                    await Clients.Caller.SendAsync("ErrorMessage", "Invalid model selected.");
+                    return;
+                }
+
+                // Notify client that typing/processing has started
+                await Clients.Caller.SendAsync("TypingStarted");
+
+                var chatResponse = await _conversationService.ProcessTemporaryMessageAsync(
+                    chatHistory,
+                    model,
+                    async (status) =>
+                    {
+                        await Clients.Caller.SendAsync("SearchStatus", status);
+                    },
+                    async (chunk) =>
+                    {
+                        await Clients.Caller.SendAsync("ReceiveChunk", chunk);
+                    },
+                    linkedCts.Token);
+
+                // Send assistant response back to client
+                await Clients.Caller.SendAsync("ReceiveMessage", new
+                {
+                    id = 0,
+                    role = "assistant",
+                    content = chatResponse.Message,
+                    createdAt = DateTime.UtcNow,
+                    model = chatResponse.Model,
+                    totalTokens = chatResponse.TotalTokens,
+                    isStopped = chatResponse.IsStopped
+                });
+            }
+            catch (Exception ex)
+            {
+                await Clients.Caller.SendAsync("ErrorMessage", "Failed to process temporary message: " + ex.Message);
+            }
+            finally
+            {
+                _activeRequests.TryRemove(Context.ConnectionId, out _);
+                cts.Dispose();
+                await Clients.Caller.SendAsync("TypingStopped");
+            }
+        }
     }
 }
