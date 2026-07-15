@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Check, Copy } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Check, Copy, Download, Maximize2, Minimize2 } from 'lucide-react';
 import { useChat } from '../store/ChatContext';
 
 interface CodeBlockProps {
@@ -7,8 +7,31 @@ interface CodeBlockProps {
   code: string;
 }
 
+const languageExtensionMap: { [key: string]: string } = {
+  java: '.java',
+  csharp: '.cs',
+  cs: '.cs',
+  python: '.py',
+  javascript: '.js',
+  js: '.js',
+  typescript: '.ts',
+  ts: '.ts',
+  html: '.html',
+  css: '.css',
+  sql: '.sql',
+  json: '.json',
+  bash: '.sh',
+  sh: '.sh',
+  rust: '.rs',
+  rs: '.rs',
+  go: '.go',
+  cpp: '.cpp',
+  c: '.c',
+};
+
 const CodeBlock: React.FC<CodeBlockProps> = ({ language, code }) => {
   const [copied, setCopied] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const { showToast } = useChat();
 
   const handleCopy = async () => {
@@ -22,37 +45,141 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, code }) => {
     }
   };
 
+  const handleDownload = () => {
+    const ext = languageExtensionMap[language?.toLowerCase()] || '.txt';
+    const blob = new Blob([code], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `code${ext}`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Code downloaded successfully', 'success');
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isExpanded) {
+        setIsExpanded(false);
+      }
+    };
+
+    if (isExpanded) {
+      document.addEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [isExpanded]);
+
   const highlightedHtml = highlightCode(code, language);
 
   return (
-    <div className="my-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-zinc-50 dark:bg-zinc-950 font-mono text-[13px] text-zinc-800 dark:text-zinc-250 shadow-md">
-      {/* Header bar */}
-      <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-900 bg-gray-100/70 dark:bg-zinc-900/60 px-4 py-2 text-gray-500 dark:text-zinc-400">
-        <span className="font-semibold uppercase tracking-wider text-[10px]">{language || 'code'}</span>
-        <button
-          onClick={handleCopy}
-          className="flex items-center space-x-1.5 rounded-lg px-2.5 py-1 transition-all hover:bg-gray-200 dark:hover:bg-zinc-850 hover:text-gray-900 dark:hover:text-zinc-100 focus:outline-none"
-        >
-          {copied ? (
-            <>
-              <Check className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="text-[10px] text-emerald-500 font-medium">Copied!</span>
-            </>
-          ) : (
-            <>
-              <Copy className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-medium">Copy code</span>
-            </>
-          )}
-        </button>
+    <>
+      <div className="my-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-zinc-50 dark:bg-zinc-950 font-mono text-[13px] text-zinc-800 dark:text-zinc-250 shadow-md">
+        {/* Header bar */}
+        <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-900 bg-gray-100/70 dark:bg-zinc-900/60 px-4 py-2 text-gray-500 dark:text-zinc-400">
+          <span className="font-semibold uppercase tracking-wider text-[10px]">{language || 'code'}</span>
+          
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleCopy}
+              title="Copy Code"
+              className="flex items-center space-x-1 p-1 rounded-lg transition-all hover:bg-gray-200 dark:hover:bg-zinc-850 hover:text-gray-900 dark:hover:text-zinc-100 focus:outline-none cursor-pointer"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className="text-[10px] text-emerald-500 font-medium">Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-medium">Copy</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleDownload}
+              title="Download Code"
+              className="flex items-center space-x-1 p-1 rounded-lg transition-all hover:bg-gray-200 dark:hover:bg-zinc-850 hover:text-gray-900 dark:hover:text-zinc-100 focus:outline-none cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-medium">Download</span>
+            </button>
+
+            <button
+              onClick={() => setIsExpanded(true)}
+              title="Expand to Fullscreen"
+              className="flex items-center space-x-1 p-1 rounded-lg transition-all hover:bg-gray-200 dark:hover:bg-zinc-850 hover:text-gray-900 dark:hover:text-zinc-100 focus:outline-none cursor-pointer"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-medium">Expand</span>
+            </button>
+          </div>
+        </div>
+        {/* Code Area */}
+        <div className="overflow-x-auto p-4 leading-relaxed bg-white dark:bg-zinc-950/20">
+          <pre className="select-text whitespace-pre overflow-x-auto">
+            <code dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
+          </pre>
+        </div>
       </div>
-      {/* Code Area */}
-      <div className="overflow-x-auto p-4 leading-relaxed bg-white dark:bg-zinc-950/20">
-        <pre className="select-text whitespace-pre overflow-x-auto">
-          <code dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
-        </pre>
-      </div>
-    </div>
+
+      {/* Fullscreen Overlay Modal */}
+      {isExpanded && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-zinc-950 p-6 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-zinc-800 pb-3 mb-4">
+            <div className="flex items-center space-x-3">
+              <span className="bg-zinc-800 text-zinc-200 text-xs font-semibold px-2.5 py-1 rounded">
+                {language?.toUpperCase() || 'CODE'}
+              </span>
+              <span className="text-zinc-400 text-xs">Fullscreen Mode</span>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={handleCopy}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-medium transition cursor-pointer"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copied ? 'Copied!' : 'Copy Code'}</span>
+              </button>
+
+              <button
+                onClick={handleDownload}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-medium transition cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download</span>
+              </button>
+
+              <button
+                onClick={() => setIsExpanded(false)}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-medium transition cursor-pointer"
+              >
+                <Minimize2 className="w-3.5 h-3.5" />
+                <span>Collapse</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Fullscreen Code Area */}
+          <div className="flex-grow overflow-auto p-6 rounded-xl border border-zinc-800 bg-zinc-950/45 font-mono text-sm leading-relaxed text-zinc-200 select-text">
+            <pre className="whitespace-pre">
+              <code dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
+            </pre>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

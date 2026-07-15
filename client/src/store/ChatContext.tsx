@@ -247,7 +247,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             );
           }
         },
-        (chunk) => {
+        (chunk: string) => {
           const currentId = activeConversationIdRef.current;
           if (!currentId && !isTemporaryModeRef.current) return;
 
@@ -262,7 +262,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             );
           }
         },
-        (payload) => {
+        (payload: any) => {
           // Record completion data and flag stream completion
           completionPayloadRef.current = payload;
           streamCompletedRef.current = true;
@@ -386,7 +386,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           );
           setRegeneratingMessageId(null);
         },
-        (payload) => {
+        (payload: any) => {
           setMessages((prev) => {
             const idx = prev.findIndex((m) => m.id === payload.editedMessageId);
             if (idx === -1) return prev;
@@ -415,7 +415,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
           setEditingMessageId(null);
         },
-        (chunk) => {
+        (chunk: string) => {
           setMessages((prev) => {
             const regenId = regeneratingMessageIdRef.current;
             if (regenId !== null) {
