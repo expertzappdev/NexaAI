@@ -48,7 +48,14 @@ interface ChatContextType {
   editingMessageId: number | null;
   setEditingMessageId: (id: number | null) => void;
   editMessage: (messageId: number, content: string) => Promise<void>;
-  stopGenerating: () => Promise<void>;
+  savedMessages: SavedMessage[];
+  saveMessage: (messageId: number) => Promise<boolean>;
+  unsaveMessage: (messageId: number) => Promise<boolean>;
+  toggleFeedback: (messageId: number, type: 'Like' | 'Dislike') => Promise<boolean>;
+  scrollToMessageId: number | null;
+  setScrollToMessageId: (id: number | null) => void;
+  isTemporaryMode: boolean;
+  setIsTemporaryMode: (active: boolean) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -69,6 +76,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<number | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
+  const [savedMessages, setSavedMessages] = useState<SavedMessage[]>([]);
+  const [scrollToMessageId, setScrollToMessageId] = useState<number | null>(null);
+  const [isTemporaryMode, setIsTemporaryModeState] = useState<boolean>(false);
+  const isTemporaryModeRef = useRef<boolean>(false);
+
+  const setIsTemporaryMode = (active: boolean) => {
+    setIsTemporaryModeState(active);
+    isTemporaryModeRef.current = active;
+    if (active) {
+      setActiveConversationId(null);
+      setMessages([]);
+    } else {
+      setMessages([]);
+    }
+  };
 
   // Store activeConversationId, regeneratingMessageId, and editingMessageId in refs to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
@@ -227,16 +249,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         (chunk) => {
           const currentId = activeConversationIdRef.current;
-          if (!currentId) return;
+          if (!currentId && !isTemporaryModeRef.current) return;
 
           // Push token chunk to queue and start typing ticker
           chunkQueueRef.current.push(chunk);
           startTypingEffect();
 
           // Touch update time of conversation in list
-          setConversations((prev) =>
-            prev.map((c) => (c.id === currentId ? { ...c, updatedAt: new Date().toISOString() } : c))
-          );
+          if (currentId) {
+            setConversations((prev) =>
+              prev.map((c) => (c.id === currentId ? { ...c, updatedAt: new Date().toISOString() } : c))
+            );
+          }
         },
         (payload) => {
           // Record completion data and flag stream completion
@@ -269,14 +293,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
               ];
             });
-          } else if (currentId !== null) {
+          } else if (currentId !== null || isTemporaryModeRef.current) {
             setMessages((prev) => {
               if (prev.some(m => m.id === 999999)) return prev;
               return [
                 ...prev,
                 {
                   id: 999999,
-                  conversationId: currentId,
+                  conversationId: currentId || 0,
                   role: 'assistant',
                   content: '',
                   createdAt: new Date().toISOString(),
@@ -673,6 +697,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const selectConversation = async (id: number) => {
+    setIsTemporaryModeState(false);
+    isTemporaryModeRef.current = false;
     setActiveConversationId(id);
     setIsLoading(true);
     try {
@@ -773,6 +799,28 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
+
+    if (isTemporaryMode) {
+      setIsLoading(true);
+      const history = messages.map(m => ({
+        role: m.role,
+        content: m.content
+      }));
+      history.push({
+        role: 'user',
+        content: text
+      });
+
+      try {
+        await socketService.sendTemporaryMessage(history, selectedModel);
+      } catch (error) {
+        console.error('Failed to send temporary message via SignalR', error);
+        showToast('Failed to send message. Connecting...', 'error');
+        setIsLoading(false);
+      }
+      return;
+    }
+
     let targetConvId = activeConversationId;
 
     // Create a new conversation if none is active
@@ -871,7 +919,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         editingMessageId,
         setEditingMessageId,
         editMessage,
-        stopGenerating,
+        savedMessages,
+        saveMessage,
+        unsaveMessage,
+        toggleFeedback,
+        scrollToMessageId,
+        setScrollToMessageId,
+        isTemporaryMode,
+        setIsTemporaryMode,
       }}
     >
       {children}

@@ -7,7 +7,7 @@ interface NavbarProps {
 }
 
 const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
-  const { conversations, activeConversationId } = useChat();
+  const { conversations, activeConversationId, isTemporaryMode } = useChat();
 
   const activeConv = conversations.find((c) => c.id === activeConversationId);
   const title = activeConv ? activeConv.title : '';
@@ -27,11 +27,15 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
           <span className="text-sm font-bold tracking-wide text-zinc-100">Nexa AI</span>
         </div>
 
-        {title && (
+        {isTemporaryMode ? (
+          <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-bold text-amber-400 tracking-wider border-l border-zinc-800/80 pl-3 ml-3">
+            <span>🕶 Temporary Chat</span>
+          </span>
+        ) : title ? (
           <span className="text-xs font-medium text-zinc-550 truncate border-l border-zinc-800/80 pl-3.5 max-w-[150px] sm:max-w-[300px]">
             {title}
           </span>
-        )}
+        ) : null}
       </div>
 
       {/* Top Right Minimal Icons Area (Removed Notifications & History) */}

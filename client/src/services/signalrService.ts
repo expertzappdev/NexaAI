@@ -10,6 +10,8 @@ class SignalrService {
   public async connect(
     token: string,
     onReceiveMessage: (payload: { id?: number; role: string; content: string; createdAt: string; model?: string; totalTokens?: number; isStopped?: boolean }) => void,
+    onReceiveMessageChunk: (chunk: string) => void,
+    onReceiveMessageCompleted: (payload: any) => void,
     onTypingStarted: () => void,
     onTypingStopped: () => void,
     onErrorMessage: (error: string) => void,
@@ -141,6 +143,13 @@ class SignalrService {
       throw new Error('Cannot send message. SignalR is not connected.');
     }
     await this.connection.invoke('SendMessage', conversationId, message, model);
+  }
+
+  public async sendTemporaryMessage(chatHistory: { role: string; content: string }[], model: string): Promise<void> {
+    if (!this.connection || this.connection.state !== HubConnectionState.Connected) {
+      throw new Error('Cannot send temporary message. SignalR is not connected.');
+    }
+    await this.connection.invoke('SendTemporaryMessage', chatHistory, model);
   }
 
   public async regenerateResponse(messageId: number, model: string): Promise<void> {

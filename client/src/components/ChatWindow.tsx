@@ -6,7 +6,7 @@ import EmptyState from './EmptyState';
 import TypingIndicator from './TypingIndicator';
 
 const ChatWindow: React.FC = () => {
-  const { messages, isLoading, scrollToMessageId, setScrollToMessageId } = useChat();
+  const { messages, isLoading, scrollToMessageId, setScrollToMessageId, regeneratingMessageId } = useChat();
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastScrollTimeRef = useRef<number>(0);

@@ -197,6 +197,20 @@ _ = Task.Run(async () =>
                 {
                     logger.LogInformation("Database and tables verified successfully.");
                 }
+
+                // Ensure UserMemories table exists
+                await context.Database.ExecuteSqlRawAsync(@"
+                    CREATE TABLE IF NOT EXISTS `UserMemories` (
+                        `Id` INT AUTO_INCREMENT PRIMARY KEY,
+                        `UserId` INT NOT NULL,
+                        `Title` VARCHAR(255) NOT NULL,
+                        `Content` TEXT NOT NULL,
+                        `CreatedAt` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                        `UpdatedAt` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+                        CONSTRAINT `FK_UserMemories_Users_UserId` FOREIGN KEY (`UserId`) 
+                            REFERENCES `Users` (`Id`) ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+                ");
             }
         }
         catch (Exception ex)
