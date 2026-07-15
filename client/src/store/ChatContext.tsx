@@ -54,8 +54,6 @@ interface ChatContextType {
   toggleFeedback: (messageId: number, type: 'Like' | 'Dislike') => Promise<boolean>;
   scrollToMessageId: number | null;
   setScrollToMessageId: (id: number | null) => void;
-  isTemporaryMode: boolean;
-  setIsTemporaryMode: (active: boolean) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -78,19 +76,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [savedMessages, setSavedMessages] = useState<SavedMessage[]>([]);
   const [scrollToMessageId, setScrollToMessageId] = useState<number | null>(null);
-  const [isTemporaryMode, setIsTemporaryModeState] = useState<boolean>(false);
-  const isTemporaryModeRef = useRef<boolean>(false);
-
-  const setIsTemporaryMode = (active: boolean) => {
-    setIsTemporaryModeState(active);
-    isTemporaryModeRef.current = active;
-    if (active) {
-      setActiveConversationId(null);
-      setMessages([]);
-    } else {
-      setMessages([]);
-    }
-  };
 
   // Store activeConversationId, regeneratingMessageId, and editingMessageId in refs to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
@@ -247,7 +232,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             );
           }
         },
-        (chunk) => {
+        (chunk: string) => {
           const currentId = activeConversationIdRef.current;
           if (!currentId && !isTemporaryModeRef.current) return;
 
@@ -262,7 +247,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             );
           }
         },
-        (payload) => {
+        (payload: any) => {
           // Record completion data and flag stream completion
           completionPayloadRef.current = payload;
           streamCompletedRef.current = true;
@@ -386,7 +371,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           );
           setRegeneratingMessageId(null);
         },
-        (payload) => {
+        (payload: any) => {
           setMessages((prev) => {
             const idx = prev.findIndex((m) => m.id === payload.editedMessageId);
             if (idx === -1) return prev;
@@ -415,7 +400,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
           setEditingMessageId(null);
         },
-        (chunk) => {
+        (chunk: string) => {
           setMessages((prev) => {
             const regenId = regeneratingMessageIdRef.current;
             if (regenId !== null) {
@@ -925,8 +910,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleFeedback,
         scrollToMessageId,
         setScrollToMessageId,
-        isTemporaryMode,
-        setIsTemporaryMode,
       }}
     >
       {children}

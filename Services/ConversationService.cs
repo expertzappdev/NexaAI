@@ -431,6 +431,8 @@ namespace AIChatBot.Services
                 searchResults = await _tavilyService.SearchAsync(content, cancellationToken);
             }
 
+
+
             // 3. Build Groq Chat History
             var chatHistory = new List<GroqMessage>();
             
