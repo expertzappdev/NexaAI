@@ -10,6 +10,15 @@ class SignalrService {
   public async connect(
     token: string,
     onReceiveMessage: (payload: { role: string; content: string; createdAt: string; model?: string; totalTokens?: number }) => void,
+    onReceiveMessageChunk: (payload: {
+      conversationId: number;
+      content: string;
+      isFirst: boolean;
+      isLast: boolean;
+      messageId?: number;
+      model?: string;
+      totalTokens?: number;
+    }) => void,
     onTypingStarted: () => void,
     onTypingStopped: () => void,
     onErrorMessage: (error: string) => void,
@@ -46,6 +55,10 @@ class SignalrService {
     // Set up listeners
     this.connection.on('ReceiveMessage', (payload) => {
       onReceiveMessage(payload);
+    });
+
+    this.connection.on('ReceiveMessageChunk', (payload) => {
+      onReceiveMessageChunk(payload);
     });
 
     this.connection.on('TypingStarted', () => {

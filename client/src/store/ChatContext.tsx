@@ -107,6 +107,58 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             );
           }
         },
+        (chunkPayload) => {
+          const currentId = activeConversationIdRef.current;
+          if (chunkPayload.conversationId !== currentId) return;
+
+          setMessages((prev) => {
+            if (chunkPayload.isFirst) {
+              // Create new assistant message placeholder
+              return [
+                ...prev,
+                {
+                  id: chunkPayload.messageId || (Date.now() + Math.random()),
+                  conversationId: currentId,
+                  role: 'assistant',
+                  content: chunkPayload.content,
+                  createdAt: new Date().toISOString(),
+                  isStreaming: true,
+                  model: chunkPayload.model,
+                  totalTokens: chunkPayload.totalTokens
+                }
+              ];
+            } else {
+              // Find the last assistant message and append the content
+              const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
+              if (lastMsgIndex !== -1) {
+                const updated = [...prev];
+                const lastMsg = updated[lastMsgIndex];
+                updated[lastMsgIndex] = {
+                  ...lastMsg,
+                  content: lastMsg.content + chunkPayload.content,
+                  isStreaming: !chunkPayload.isLast,
+                  id: chunkPayload.isLast && chunkPayload.messageId ? chunkPayload.messageId : lastMsg.id,
+                  model: chunkPayload.model || lastMsg.model,
+                  totalTokens: chunkPayload.totalTokens || lastMsg.totalTokens
+                };
+                return updated;
+              }
+              return prev;
+            }
+          });
+
+          // Touch update time of conversation in list
+          if (currentId) {
+            setConversations((prev) =>
+              prev.map((c) => (c.id === currentId ? { ...c, updatedAt: new Date().toISOString() } : c))
+            );
+          }
+
+          if (chunkPayload.isLast) {
+            setIsLoading(false);
+            setSearchStatus(null);
+          }
+        },
         () => {
           setIsLoading(true);
         },

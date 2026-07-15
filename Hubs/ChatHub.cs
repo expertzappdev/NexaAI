@@ -72,7 +72,9 @@ namespace AIChatBot.Hubs
                 // Notify client that typing/processing has started
                 await Clients.Caller.SendAsync("TypingStarted");
 
-                // Process conversation and call Groq
+                bool isFirst = true;
+
+                // Process conversation and call Groq (with streaming callback)
                 var chatResponse = await _conversationService.ProcessSendMessageAsync(
                     userId,
                     conversationId,
@@ -82,14 +84,27 @@ namespace AIChatBot.Hubs
                     {
                         await Clients.Caller.SendAsync("SearchStatus", status);
                     },
+                    async (chunk) =>
+                    {
+                        await Clients.Caller.SendAsync("ReceiveMessageChunk", new
+                        {
+                            conversationId = conversationId,
+                            content = chunk,
+                            isFirst = isFirst,
+                            isLast = false
+                        });
+                        isFirst = false;
+                    },
                     Context.ConnectionAborted);
 
-                // Send assistant response back to client
-                await Clients.Caller.SendAsync("ReceiveMessage", new
+                // Send final chunk metadata to close streaming state
+                await Clients.Caller.SendAsync("ReceiveMessageChunk", new
                 {
-                    role = "assistant",
-                    content = chatResponse.Message,
-                    createdAt = DateTime.UtcNow,
+                    conversationId = conversationId,
+                    content = "",
+                    isFirst = false,
+                    isLast = true,
+                    messageId = chatResponse.Id,
                     model = chatResponse.Model,
                     totalTokens = chatResponse.TotalTokens
                 });

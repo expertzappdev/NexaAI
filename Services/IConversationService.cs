@@ -63,6 +63,7 @@ namespace AIChatBot.Services
             string content, 
             string model,
             System.Func<string, System.Threading.Tasks.Task>? onStatusUpdate = null,
+            System.Func<string, System.Threading.Tasks.Task>? onChunkReceived = null,
             CancellationToken cancellationToken = default);
     }
 }

@@ -360,6 +360,7 @@ namespace AIChatBot.Services
             string content, 
             string model,
             Func<string, Task>? onStatusUpdate = null,
+            Func<string, Task>? onChunkReceived = null,
             CancellationToken cancellationToken = default)
         {
             // 1. Verify Ownership & Load Conversation
@@ -383,7 +384,19 @@ namespace AIChatBot.Services
                 conversation.SelectedModel = model;
             }
 
-            // 2. Decide if web search is needed
+            // 2. Save User Message immediately in Db
+            var userMessage = new Message
+            {
+                ConversationId = conversationId,
+                Role = "user",
+                Content = content,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _messageRepository.AddAsync(userMessage, cancellationToken);
+            conversation.UpdatedAt = DateTime.UtcNow;
+            await _conversationRepository.SaveChangesAsync(cancellationToken);
+
+            // 3. Decide if web search is needed
             bool requiresSearch = false;
             string searchReason = "";
             string finalModel = model;
@@ -415,11 +428,13 @@ namespace AIChatBot.Services
                 searchResults = await _tavilyService.SearchAsync(content, cancellationToken);
             }
 
-            // 3. Build Groq Chat History
+            // 4. Build Groq Chat History
             var chatHistory = new List<GroqMessage>();
             
             // Add system prompt if history is empty (or as first message)
-            bool hasSystemMessage = conversation.Messages.Any(m => m.Role.Equals("system", StringComparison.OrdinalIgnoreCase));
+            bool hasSystemMessage = conversation.Messages
+                .Where(m => m.Id != userMessage.Id)
+                .Any(m => m.Role.Equals("system", StringComparison.OrdinalIgnoreCase));
             if (!hasSystemMessage)
             {
                 chatHistory.Add(new GroqMessage
@@ -429,8 +444,8 @@ namespace AIChatBot.Services
                 });
             }
 
-            // Map all existing messages ordered by creation
-            foreach (var dbMsg in conversation.Messages.OrderBy(m => m.CreatedAt))
+            // Map all existing messages ordered by creation (excluding the user message we just saved to avoid duplicates)
+            foreach (var dbMsg in conversation.Messages.Where(m => m.Id != userMessage.Id).OrderBy(m => m.CreatedAt))
             {
                 chatHistory.Add(new GroqMessage
                 {
@@ -456,31 +471,59 @@ namespace AIChatBot.Services
                 Content = content
             });
 
-            // 4. Call Groq Service
-            var groqResponse = await _groqService.SendMessageAsync(chatHistory, finalModel, cancellationToken);
+            string assistantContent = "";
+            int? promptTokens = null;
+            int? completionTokens = null;
+            int? totalTokens = null;
+            string modelUsed = finalModel;
 
-            // 5. Extract Response Content and Token Info
-            var assistantContent = groqResponse.Choices[0].Message.Content;
-            var promptTokens = groqResponse.Usage?.PromptTokens;
-            var completionTokens = groqResponse.Usage?.CompletionTokens;
-            var totalTokens = groqResponse.Usage?.TotalTokens;
-            
-            var modelUsed = groqResponse.Model;
+            // 5. Call Groq Service (Streaming vs Non-Streaming)
+            if (onChunkReceived != null)
+            {
+                var sb = new System.Text.StringBuilder();
+                await foreach (var responseChunk in _groqService.SendMessageStreamAsync(chatHistory, finalModel, cancellationToken))
+                {
+                    if (responseChunk.Choices != null && responseChunk.Choices.Count > 0)
+                    {
+                        var chunkText = responseChunk.Choices[0].Delta?.Content;
+                        if (!string.IsNullOrEmpty(chunkText))
+                        {
+                            sb.Append(chunkText);
+                            await onChunkReceived(chunkText);
+                        }
+                    }
+
+                    if (responseChunk.Usage != null)
+                    {
+                        promptTokens = responseChunk.Usage.PromptTokens;
+                        completionTokens = responseChunk.Usage.CompletionTokens;
+                        totalTokens = responseChunk.Usage.TotalTokens;
+                    }
+
+                    if (!string.IsNullOrEmpty(responseChunk.Model))
+                    {
+                        modelUsed = responseChunk.Model;
+                    }
+                }
+                assistantContent = sb.ToString();
+            }
+            else
+            {
+                var groqResponse = await _groqService.SendMessageAsync(chatHistory, finalModel, cancellationToken);
+                assistantContent = groqResponse.Choices[0].Message.Content;
+                promptTokens = groqResponse.Usage?.PromptTokens;
+                completionTokens = groqResponse.Usage?.CompletionTokens;
+                totalTokens = groqResponse.Usage?.TotalTokens;
+                modelUsed = groqResponse.Model;
+            }
+
             if (requiresSearch)
             {
                 // Indicate search usage in the persisted model name
                 modelUsed += " + Search";
             }
 
-            // 6. Save Messages in Db
-            var userMessage = new Message
-            {
-                ConversationId = conversationId,
-                Role = "user",
-                Content = content,
-                CreatedAt = DateTime.UtcNow
-            };
-
+            // 6. Save Assistant Message in Db
             var assistantMessage = new Message
             {
                 ConversationId = conversationId,
@@ -495,7 +538,6 @@ namespace AIChatBot.Services
 
             conversation.UpdatedAt = DateTime.UtcNow;
 
-            await _messageRepository.AddAsync(userMessage, cancellationToken);
             await _messageRepository.AddAsync(assistantMessage, cancellationToken);
             
             _conversationRepository.Update(conversation);
@@ -509,7 +551,8 @@ namespace AIChatBot.Services
                 Success = true,
                 Message = assistantContent,
                 Model = modelUsed,
-                TotalTokens = totalTokens
+                TotalTokens = totalTokens,
+                Id = assistantMessage.Id
             };
         }
     }

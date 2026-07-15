@@ -3,9 +3,10 @@ import CodeBlock from './CodeBlock';
 
 interface MarkdownRendererProps {
   content: string;
+  isStreaming?: boolean;
 }
 
-const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
+const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, isStreaming = false }) => {
   if (!content) return null;
 
   // Split text by triple backticks to isolate code blocks
@@ -14,16 +15,25 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
   return (
     <div className="space-y-3 text-sm leading-relaxed text-gray-800 dark:text-zinc-150 break-words">
       {parts.map((part, index) => {
+        const isLastPart = index === parts.length - 1;
+
         // Render Code Block
         if (part.startsWith('```') && part.endsWith('```')) {
           const match = part.match(/```(\w*)\n([\s\S]*?)```/);
           const language = match ? match[1] : '';
           const code = match ? match[2] : part.slice(3, -3);
-          return <CodeBlock key={index} language={language} code={code} />;
+          return (
+            <div key={index} className="relative">
+              <CodeBlock language={language} code={code} />
+              {isLastPart && isStreaming && (
+                <span className="inline-block w-1 h-3.5 ml-1 bg-indigo-500 dark:bg-indigo-400 animate-pulse rounded-sm align-middle mt-2"></span>
+              )}
+            </div>
+          );
         }
 
         // Render processed text blocks
-        return <div key={index} className="space-y-2">{renderBlocks(part)}</div>;
+        return <div key={index} className="space-y-2">{renderBlocks(part, isStreaming && isLastPart)}</div>;
       })}
     </div>
   );
@@ -41,7 +51,7 @@ type Block =
   | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'spacer' };
 
-function renderBlocks(text: string): React.ReactNode[] {
+function renderBlocks(text: string, isStreaming: boolean): React.ReactNode[] {
   const lines = text.split('\n');
   const blocks: Block[] = [];
   let i = 0;
@@ -158,13 +168,16 @@ function renderBlocks(text: string): React.ReactNode[] {
   }
 
   return blocks.map((block, idx) => {
+    const isLastBlock = idx === blocks.length - 1;
+    const cursorHtml = (isLastBlock && isStreaming) ? '<span class="inline-block w-1.5 h-3.5 ml-1 bg-indigo-500 dark:bg-indigo-400 animate-pulse rounded-sm align-middle"></span>' : '';
+
     switch (block.type) {
       case 'h1':
         return (
           <h1
             key={idx}
             className="text-xl font-bold mt-4 mb-2 text-gray-900 dark:text-white border-b border-gray-100 dark:border-zinc-800 pb-1"
-            dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(block.text) }}
+            dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(block.text) + cursorHtml }}
           />
         );
       case 'h2':
@@ -172,7 +185,7 @@ function renderBlocks(text: string): React.ReactNode[] {
           <h2
             key={idx}
             className="text-lg font-bold mt-3 mb-1.5 text-gray-900 dark:text-white"
-            dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(block.text) }}
+            dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(block.text) + cursorHtml }}
           />
         );
       case 'h3':
@@ -180,7 +193,7 @@ function renderBlocks(text: string): React.ReactNode[] {
           <h3
             key={idx}
             className="text-base font-semibold mt-2.5 mb-1 text-gray-900 dark:text-white"
-            dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(block.text) }}
+            dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(block.text) + cursorHtml }}
           />
         );
       case 'blockquote':
@@ -188,23 +201,31 @@ function renderBlocks(text: string): React.ReactNode[] {
           <blockquote
             key={idx}
             className="border-l-4 border-indigo-500 pl-4 py-1 my-3 bg-gray-50 dark:bg-zinc-900/40 text-gray-600 dark:text-zinc-400 italic rounded-r-lg"
-            dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(block.text) }}
+            dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(block.text) + cursorHtml }}
           />
         );
       case 'ul':
         return (
           <ul key={idx} className="list-disc pl-5 my-2 space-y-1 text-gray-700 dark:text-zinc-300">
-            {block.items.map((item, itemIdx) => (
-              <li key={itemIdx} dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(item) }} />
-            ))}
+            {block.items.map((item, itemIdx) => {
+              const isLastItem = itemIdx === block.items.length - 1;
+              const itemCursor = (isLastBlock && isStreaming && isLastItem) ? cursorHtml : '';
+              return (
+                <li key={itemIdx} dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(item) + itemCursor }} />
+              );
+            })}
           </ul>
         );
       case 'ol':
         return (
           <ol key={idx} className="list-decimal pl-5 my-2 space-y-1 text-gray-700 dark:text-zinc-300">
-            {block.items.map((item, itemIdx) => (
-              <li key={itemIdx} dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(item) }} />
-            ))}
+            {block.items.map((item, itemIdx) => {
+              const isLastItem = itemIdx === block.items.length - 1;
+              const itemCursor = (isLastBlock && isStreaming && isLastItem) ? cursorHtml : '';
+              return (
+                <li key={itemIdx} dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(item) + itemCursor }} />
+              );
+            })}
           </ol>
         );
       case 'table':
@@ -237,7 +258,7 @@ function renderBlocks(text: string): React.ReactNode[] {
           <p
             key={idx}
             className="my-1.5 leading-relaxed text-gray-800 dark:text-zinc-200"
-            dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(block.text) }}
+            dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(block.text) + cursorHtml }}
           />
         );
       default:
