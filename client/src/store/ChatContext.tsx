@@ -30,6 +30,7 @@ interface ChatContextType {
   deleteConversation: (id: number) => Promise<boolean>;
   pinConversation: (id: number, isPinned: boolean) => Promise<boolean>;
   sendMessage: (text: string) => Promise<void>;
+  stopGenerating: () => Promise<void>;
   clearMessages: () => void;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
   selectedModel: string;
@@ -70,11 +71,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [savedMessages, setSavedMessages] = useState<SavedMessage[]>([]);
   const [scrollToMessageId, setScrollToMessageId] = useState<number | null>(null);
 
-  // Store activeConversationId in a ref to avoid stale closures in socket event handlers
+  // Store activeConversationId and selectedModel in refs to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
+  const selectedModelRef = useRef<string>(selectedModel);
   useEffect(() => {
     activeConversationIdRef.current = activeConversationId;
   }, [activeConversationId]);
+  useEffect(() => {
+    selectedModelRef.current = selectedModel;
+  }, [selectedModel]);
 
   // Handle SignalR connection lifecycle and event listeners
   useEffect(() => {
@@ -107,82 +112,125 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             );
           }
         },
-        (chunkPayload) => {
+        (chunk) => {
           const currentId = activeConversationIdRef.current;
-          if (chunkPayload.conversationId !== currentId) return;
+          if (!currentId) return;
 
           setMessages((prev) => {
-            if (chunkPayload.isFirst) {
-              // Create new assistant message placeholder
+            const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
+            if (lastMsgIndex !== -1) {
+              const updated = [...prev];
+              const lastMsg = updated[lastMsgIndex];
+              updated[lastMsgIndex] = {
+                ...lastMsg,
+                content: lastMsg.content + chunk,
+                isStreaming: true,
+              };
+              return updated;
+            } else {
               return [
                 ...prev,
                 {
-                  id: chunkPayload.messageId || (Date.now() + Math.random()),
+                  id: Date.now() + Math.random(),
                   conversationId: currentId,
                   role: 'assistant',
-                  content: chunkPayload.content,
+                  content: chunk,
                   createdAt: new Date().toISOString(),
                   isStreaming: true,
-                  model: chunkPayload.model,
-                  totalTokens: chunkPayload.totalTokens
+                  model: selectedModelRef.current
                 }
               ];
-            } else {
-              // Find the last assistant message and append the content
-              const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
-              if (lastMsgIndex !== -1) {
-                const updated = [...prev];
-                const lastMsg = updated[lastMsgIndex];
-                updated[lastMsgIndex] = {
-                  ...lastMsg,
-                  content: lastMsg.content + chunkPayload.content,
-                  isStreaming: !chunkPayload.isLast,
-                  id: chunkPayload.isLast && chunkPayload.messageId ? chunkPayload.messageId : lastMsg.id,
-                  model: chunkPayload.model || lastMsg.model,
-                  totalTokens: chunkPayload.totalTokens || lastMsg.totalTokens
-                };
-                return updated;
-              }
-              return prev;
             }
           });
 
           // Touch update time of conversation in list
-          if (currentId) {
-            setConversations((prev) =>
-              prev.map((c) => (c.id === currentId ? { ...c, updatedAt: new Date().toISOString() } : c))
-            );
-          }
+          setConversations((prev) =>
+            prev.map((c) => (c.id === currentId ? { ...c, updatedAt: new Date().toISOString() } : c))
+          );
+        },
+        (payload) => {
+          const currentId = activeConversationIdRef.current;
+          if (!currentId) return;
 
-          if (chunkPayload.isLast) {
-            setIsLoading(false);
-            setSearchStatus(null);
-          }
+          setMessages((prev) => {
+            const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
+            if (lastMsgIndex !== -1) {
+              const updated = [...prev];
+              const lastMsg = updated[lastMsgIndex];
+              updated[lastMsgIndex] = {
+                ...lastMsg,
+                id: payload.messageId || lastMsg.id,
+                content: payload.content !== undefined ? payload.content : lastMsg.content,
+                isStreaming: false,
+                model: payload.model || lastMsg.model,
+                totalTokens: payload.totalTokens || lastMsg.totalTokens
+              };
+              return updated;
+            }
+            return prev;
+          });
+
+          setIsLoading(false);
+          setSearchStatus(null);
         },
         () => {
           setIsLoading(true);
+          const currentId = activeConversationIdRef.current;
+          if (currentId) {
+            setMessages((prev) => {
+              const lastMsg = prev[prev.length - 1];
+              if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
+                return prev;
+              }
+              return [
+                ...prev,
+                {
+                  id: Date.now() + Math.random(),
+                  conversationId: currentId,
+                  role: 'assistant',
+                  content: '',
+                  createdAt: new Date().toISOString(),
+                  isStreaming: true,
+                  model: selectedModelRef.current
+                }
+              ];
+            });
+          }
         },
         () => {
           setIsLoading(false);
           setSearchStatus(null);
+          setMessages((prev) => {
+            const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
+            if (lastMsgIndex !== -1 && prev[lastMsgIndex].isStreaming) {
+              const updated = [...prev];
+              updated[lastMsgIndex] = {
+                ...updated[lastMsgIndex],
+                isStreaming: false
+              };
+              return updated;
+            }
+            return prev;
+          });
         },
         (errorMsg) => {
           showToast(errorMsg, 'error');
           setSearchStatus(null);
-          // Append error message to screen
-          const currentId = activeConversationIdRef.current;
-          if (currentId) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: Date.now() + Math.random(),
-                conversationId: currentId,
-                role: 'assistant',
-                content: `Error: ${errorMsg}`,
-                createdAt: new Date().toISOString(),
-              },
-            ]);
-          }
+          setIsLoading(false);
+          setMessages((prev) => {
+            const lastMsgIndex = prev.map(m => m.role === 'assistant').lastIndexOf(true);
+            if (lastMsgIndex !== -1) {
+              const updated = [...prev];
+              const lastMsg = updated[lastMsgIndex];
+              updated[lastMsgIndex] = {
+                ...lastMsg,
+                isStreaming: false,
+                content: lastMsg.content || 'Generation interrupted.'
+              };
+              return updated;
+            }
+            return prev;
+          });
         },
         (connected) => {
           setSocketConnected(connected);
@@ -575,6 +623,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const stopGenerating = async () => {
+    try {
+      await socketService.stopGenerating();
+    } catch (error) {
+      console.error('Failed to stop generating via SignalR', error);
+    }
+  };
+
   const clearMessages = () => {
     setMessages([]);
     setActiveConversationId(null);
@@ -599,6 +655,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteConversation,
         pinConversation,
         sendMessage,
+        stopGenerating,
         clearMessages,
         showToast,
         selectedModel,

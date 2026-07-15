@@ -1,6 +1,8 @@
 using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using System.Threading;
+using System.Collections.Concurrent;
 using AIChatBot.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -11,6 +13,7 @@ namespace AIChatBot.Hubs
     public class ChatHub : Hub
     {
         private readonly IConversationService _conversationService;
+        private static readonly ConcurrentDictionary<string, CancellationTokenSource> _ctsMap = new();
 
         public ChatHub(IConversationService conversationService)
         {
@@ -27,8 +30,21 @@ namespace AIChatBot.Hubs
             return userId;
         }
 
+        public void StopGenerating()
+        {
+            var connectionId = Context.ConnectionId;
+            if (_ctsMap.TryGetValue(connectionId, out var cts))
+            {
+                cts.Cancel();
+            }
+        }
+
         public async Task SendMessage(int conversationId, string message, string model)
         {
+            var connectionId = Context.ConnectionId;
+            var cts = new CancellationTokenSource();
+            _ctsMap[connectionId] = cts;
+
             try
             {
                 if (string.IsNullOrWhiteSpace(message))
@@ -50,6 +66,7 @@ namespace AIChatBot.Hubs
                     "qwen/qwen3.6-27b",
                     "qwen/qwen3-32b",
                     "groq/compound-mini",
+                    "groq/compound",
                     "nexa-web-search"
                 };
 
@@ -72,46 +89,42 @@ namespace AIChatBot.Hubs
                 // Notify client that typing/processing has started
                 await Clients.Caller.SendAsync("TypingStarted");
 
-                bool isFirst = true;
-
-                // Process conversation and call Groq (with streaming callback)
-                var chatResponse = await _conversationService.ProcessSendMessageAsync(
-                    userId,
-                    conversationId,
-                    message,
-                    model,
-                    async (status) =>
-                    {
-                        await Clients.Caller.SendAsync("SearchStatus", status);
-                    },
-                    async (chunk) =>
-                    {
-                        await Clients.Caller.SendAsync("ReceiveMessageChunk", new
-                        {
-                            conversationId = conversationId,
-                            content = chunk,
-                            isFirst = isFirst,
-                            isLast = false
-                        });
-                        isFirst = false;
-                    },
-                    Context.ConnectionAborted);
-
-                // Send final chunk metadata to close streaming state
-                await Clients.Caller.SendAsync("ReceiveMessageChunk", new
+                // Link the manual CTS token with the SignalR ConnectionAborted token
+                using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(Context.ConnectionAborted, cts.Token))
                 {
-                    conversationId = conversationId,
-                    content = "",
-                    isFirst = false,
-                    isLast = true,
-                    messageId = chatResponse.Id,
-                    model = chatResponse.Model,
-                    totalTokens = chatResponse.TotalTokens
-                });
+                    // Process conversation and call Groq (with streaming callback)
+                    var chatResponse = await _conversationService.ProcessSendMessageAsync(
+                        userId,
+                        conversationId,
+                        message,
+                        model,
+                        async (status) =>
+                        {
+                            await Clients.Caller.SendAsync("SearchStatus", status);
+                        },
+                        async (chunk) =>
+                        {
+                            await Clients.Caller.SendAsync("ReceiveMessageChunk", chunk);
+                        },
+                        linkedCts.Token);
+
+                    // Send completion details
+                    await Clients.Caller.SendAsync("ReceiveMessageCompleted", new
+                    {
+                        messageId = chatResponse.Id,
+                        model = chatResponse.Model,
+                        totalTokens = chatResponse.TotalTokens,
+                        content = chatResponse.Message
+                    });
+                }
             }
             catch (UnauthorizedAccessException ex)
             {
                 await Clients.Caller.SendAsync("ErrorMessage", "You are not authorized: " + ex.Message);
+            }
+            catch (OperationCanceledException)
+            {
+                // Silence operation canceled logs / expected path when user clicks Stop
             }
             catch (Exception ex)
             {
@@ -119,7 +132,10 @@ namespace AIChatBot.Hubs
             }
             finally
             {
-                // Ensure typing stopped is always triggered even on errors
+                _ctsMap.TryRemove(connectionId, out _);
+                cts.Dispose();
+                
+                // Ensure typing stopped is always triggered even on errors/cancellation
                 await Clients.Caller.SendAsync("TypingStopped");
             }
         }

@@ -4,7 +4,7 @@ import { useChat } from '../store/ChatContext';
 import ModelSelector from './ModelSelector';
 
 const MessageInput: React.FC = () => {
-  const { sendMessage, isLoading } = useChat();
+  const { sendMessage, stopGenerating, isLoading } = useChat();
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -24,14 +24,23 @@ const MessageInput: React.FC = () => {
     }
   }, [isLoading]);
 
+  const handleStop = async () => {
+    await stopGenerating();
+    // Force focus back immediately after stopping
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 50);
+  };
+
   const handleSend = async () => {
     if (!text.trim() || isLoading) return;
     const currentText = text;
     setText('');
     
-    // Reset height
+    // Reset height and keep focus
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
+      textareaRef.current.focus();
     }
 
     await sendMessage(currentText);
@@ -82,22 +91,30 @@ const MessageInput: React.FC = () => {
           <ModelSelector />
         </div>
 
-        {/* Circular Send Button with gradient */}
-        <button
-          onClick={handleSend}
-          disabled={!text.trim() || isLoading}
-          className={`flex items-center justify-center w-9.5 h-9.5 rounded-full mb-0.5 transition-all focus:outline-none ${
-            text.trim() && !isLoading
-              ? 'bg-gradient-to-tr from-blue-600 to-purple-600 text-white shadow-[0_0_15px_rgba(139,92,246,0.35)] hover:brightness-110'
-              : 'bg-zinc-800 text-zinc-650 cursor-not-allowed'
-          }`}
-        >
-          {isLoading ? (
-            <div className="w-4 h-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin"></div>
-          ) : (
+        {/* Send / Stop Generating Button */}
+        {isLoading ? (
+          <button
+            type="button"
+            onClick={handleStop}
+            className="flex items-center justify-center w-9.5 h-9.5 rounded-full mb-0.5 transition-all focus:outline-none bg-red-600 hover:bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.35)] hover:scale-105"
+            title="Stop Generating"
+          >
+            {/* Square Stop Icon */}
+            <div className="w-3 h-3 bg-zinc-100 rounded-sm"></div>
+          </button>
+        ) : (
+          <button
+            onClick={handleSend}
+            disabled={!text.trim()}
+            className={`flex items-center justify-center w-9.5 h-9.5 rounded-full mb-0.5 transition-all focus:outline-none ${
+              text.trim()
+                ? 'bg-gradient-to-tr from-blue-600 to-purple-600 text-white shadow-[0_0_15px_rgba(139,92,246,0.35)] hover:brightness-110 hover:scale-105'
+                : 'bg-zinc-800 text-zinc-650 cursor-not-allowed'
+            }`}
+          >
             <ArrowUp className="w-5 h-5" />
-          )}
-        </button>
+          </button>
+        )}
       </div>
       <p className="text-[10px] text-center text-zinc-600 mt-2 font-medium">
         Nexa AI may display inaccurate info. Verify credentials and responses.

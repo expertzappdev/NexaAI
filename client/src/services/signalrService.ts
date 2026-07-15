@@ -10,15 +10,8 @@ class SignalrService {
   public async connect(
     token: string,
     onReceiveMessage: (payload: { role: string; content: string; createdAt: string; model?: string; totalTokens?: number }) => void,
-    onReceiveMessageChunk: (payload: {
-      conversationId: number;
-      content: string;
-      isFirst: boolean;
-      isLast: boolean;
-      messageId?: number;
-      model?: string;
-      totalTokens?: number;
-    }) => void,
+    onReceiveMessageChunk: (chunk: string) => void,
+    onReceiveMessageCompleted: (payload: { messageId?: number; model?: string; totalTokens?: number; content?: string }) => void,
     onTypingStarted: () => void,
     onTypingStopped: () => void,
     onErrorMessage: (error: string) => void,
@@ -57,8 +50,12 @@ class SignalrService {
       onReceiveMessage(payload);
     });
 
-    this.connection.on('ReceiveMessageChunk', (payload) => {
-      onReceiveMessageChunk(payload);
+    this.connection.on('ReceiveMessageChunk', (chunk: string) => {
+      onReceiveMessageChunk(chunk);
+    });
+
+    this.connection.on('ReceiveMessageCompleted', (payload) => {
+      onReceiveMessageCompleted(payload);
     });
 
     this.connection.on('TypingStarted', () => {
@@ -125,6 +122,13 @@ class SignalrService {
       throw new Error('Cannot send message. SignalR is not connected.');
     }
     await this.connection.invoke('SendMessage', conversationId, message, model);
+  }
+
+  public async stopGenerating(): Promise<void> {
+    if (!this.connection || this.connection.state !== HubConnectionState.Connected) {
+      return;
+    }
+    await this.connection.invoke('StopGenerating');
   }
 
   public isConnected(): boolean {

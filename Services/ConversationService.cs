@@ -476,51 +476,85 @@ namespace AIChatBot.Services
             int? completionTokens = null;
             int? totalTokens = null;
             string modelUsed = finalModel;
+            bool isInterrupted = false;
 
             // 5. Call Groq Service (Streaming vs Non-Streaming)
             if (onChunkReceived != null)
             {
                 var sb = new System.Text.StringBuilder();
-                await foreach (var responseChunk in _groqService.SendMessageStreamAsync(chatHistory, finalModel, cancellationToken))
+                try
                 {
-                    if (responseChunk.Choices != null && responseChunk.Choices.Count > 0)
+                    await foreach (var responseChunk in _groqService.SendMessageStreamAsync(chatHistory, finalModel, cancellationToken))
                     {
-                        var chunkText = responseChunk.Choices[0].Delta?.Content;
-                        if (!string.IsNullOrEmpty(chunkText))
+                        if (responseChunk.Choices != null && responseChunk.Choices.Count > 0)
                         {
-                            sb.Append(chunkText);
-                            await onChunkReceived(chunkText);
+                            var chunkText = responseChunk.Choices[0].Delta?.Content;
+                            if (!string.IsNullOrEmpty(chunkText))
+                            {
+                                sb.Append(chunkText);
+                                await onChunkReceived(chunkText);
+                            }
+                        }
+
+                        if (responseChunk.Usage != null)
+                        {
+                            promptTokens = responseChunk.Usage.PromptTokens;
+                            completionTokens = responseChunk.Usage.CompletionTokens;
+                            totalTokens = responseChunk.Usage.TotalTokens;
+                        }
+
+                        if (!string.IsNullOrEmpty(responseChunk.Model))
+                        {
+                            modelUsed = responseChunk.Model;
                         }
                     }
-
-                    if (responseChunk.Usage != null)
-                    {
-                        promptTokens = responseChunk.Usage.PromptTokens;
-                        completionTokens = responseChunk.Usage.CompletionTokens;
-                        totalTokens = responseChunk.Usage.TotalTokens;
-                    }
-
-                    if (!string.IsNullOrEmpty(responseChunk.Model))
-                    {
-                        modelUsed = responseChunk.Model;
-                    }
                 }
+                catch (Exception ex) when (ex is OperationCanceledException || ex is TaskCanceledException)
+                {
+                    _logger.LogInformation("Streaming was stopped or cancelled by user/connection drop.");
+                    isInterrupted = true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Exception occurred during Groq streaming.");
+                    isInterrupted = true;
+                    sb.Append("\n\nGeneration interrupted.");
+                }
+
                 assistantContent = sb.ToString();
+                if (string.IsNullOrWhiteSpace(assistantContent))
+                {
+                    assistantContent = "Generation interrupted.";
+                }
             }
             else
             {
-                var groqResponse = await _groqService.SendMessageAsync(chatHistory, finalModel, cancellationToken);
-                assistantContent = groqResponse.Choices[0].Message.Content;
-                promptTokens = groqResponse.Usage?.PromptTokens;
-                completionTokens = groqResponse.Usage?.CompletionTokens;
-                totalTokens = groqResponse.Usage?.TotalTokens;
-                modelUsed = groqResponse.Model;
+                try
+                {
+                    var groqResponse = await _groqService.SendMessageAsync(chatHistory, finalModel, cancellationToken);
+                    assistantContent = groqResponse.Choices[0].Message.Content;
+                    promptTokens = groqResponse.Usage?.PromptTokens;
+                    completionTokens = groqResponse.Usage?.CompletionTokens;
+                    totalTokens = groqResponse.Usage?.TotalTokens;
+                    modelUsed = groqResponse.Model;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Exception occurred during Groq SendMessageAsync.");
+                    assistantContent = "Generation interrupted.";
+                    isInterrupted = true;
+                }
             }
 
             if (requiresSearch)
             {
                 // Indicate search usage in the persisted model name
                 modelUsed += " + Search";
+            }
+
+            if (isInterrupted)
+            {
+                modelUsed += " (Interrupted)";
             }
 
             // 6. Save Assistant Message in Db
