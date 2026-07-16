@@ -22,7 +22,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     editMessage, 
     isLoading,
     showToast,
-    toggleFeedback
+    toggleFeedback,
+    isTemporaryMode
   } = useChat();
 
   const isCurrentlyRegenerating = regeneratingMessageId === message.id;

@@ -54,6 +54,8 @@ interface ChatContextType {
   toggleFeedback: (messageId: number, type: 'Like' | 'Dislike') => Promise<boolean>;
   scrollToMessageId: number | null;
   setScrollToMessageId: (id: number | null) => void;
+  isTemporaryMode: boolean;
+  setIsTemporaryMode: (val: boolean) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -76,6 +78,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [savedMessages, setSavedMessages] = useState<SavedMessage[]>([]);
   const [scrollToMessageId, setScrollToMessageId] = useState<number | null>(null);
+
+  const [isTemporaryMode, setIsTemporaryModeState] = useState<boolean>(false);
+  const isTemporaryModeRef = useRef<boolean>(false);
+
+  const setIsTemporaryMode = (val: boolean) => {
+    setIsTemporaryModeState(val);
+    isTemporaryModeRef.current = val;
+    if (val) {
+      setMessages([]);
+      setActiveConversationId(null);
+    }
+  };
 
   // Store activeConversationId, regeneratingMessageId, and editingMessageId in refs to avoid stale closures in socket event handlers
   const activeConversationIdRef = useRef<number | null>(null);
@@ -910,6 +924,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleFeedback,
         scrollToMessageId,
         setScrollToMessageId,
+        isTemporaryMode,
+        setIsTemporaryMode,
       }}
     >
       {children}
