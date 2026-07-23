@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { pb } from '../lib/pocketbase';
 
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:5000/api'
@@ -11,10 +12,10 @@ const apiClient = axios.create({
   },
 });
 
-// Request Interceptor to automatically attach JWT token
+// Request Interceptor to automatically attach PocketBase or JWT token
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('chatbot_token');
+    const token = (pb.authStore.isValid ? pb.authStore.token : null) || localStorage.getItem('chatbot_token');
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }

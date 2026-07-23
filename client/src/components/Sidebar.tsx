@@ -31,7 +31,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onShortcutClick }) =
   const [archivedExpanded, setArchivedExpanded] = useState(false);
   const [savedExpanded, setSavedExpanded] = useState(false);
 
-  const handleSavedMessageClick = async (conversationId: number, messageId: number) => {
+  const handleSavedMessageClick = async (conversationId: number | string, messageId: number | string) => {
     setScrollToMessageId(messageId);
     await selectConversation(conversationId);
     onClose();

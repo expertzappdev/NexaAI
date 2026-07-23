@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Mail, Lock, AlertCircle, ArrowRight } from 'lucide-react';
 import { useChat } from '../store/ChatContext';
 import apiClient from '../api/client';
+import { pocketbaseAuth } from '../services/pocketbaseAuth';
 import type { AuthResponse } from '../types';
 
 const Login: React.FC = () => {
@@ -28,6 +29,25 @@ const Login: React.FC = () => {
     setLoading(true);
 
     try {
+      // 1. Try primary PocketBase authentication
+      try {
+        const pbResult = await pocketbaseAuth.loginWithPassword(email.trim(), password);
+        if (pbResult.token && pbResult.record) {
+          const userObj = {
+            id: pbResult.record.id,
+            email: pbResult.record.email,
+            name: pbResult.record.name || pbResult.record.email.split('@')[0],
+          };
+          login(pbResult.token, userObj);
+          navigate('/chat');
+          return;
+        }
+      } catch (pbErr: any) {
+        // If PocketBase returns invalid credentials or isn't reached, log warning and try backend fallback
+        console.warn('PocketBase auth warning:', pbErr?.message || pbErr);
+      }
+
+      // 2. Fallback to ASP.NET Core auth endpoint if legacy user
       const response = await apiClient.post<AuthResponse>('/auth/login', {
         email: email.trim(),
         password,
@@ -40,11 +60,11 @@ const Login: React.FC = () => {
         setError(response.data.errorMessage || 'Invalid credentials.');
       }
     } catch (err: any) {
-      console.error(err);
       setError(
         err.response?.data?.errorMessage || 
         err.response?.data?.Email?.[0] ||
-        'Failed to connect. Please check your credentials or database status.'
+        err?.message ||
+        'Failed to log in. Please check your credentials or PocketBase server.'
       );
     } finally {
       setLoading(false);

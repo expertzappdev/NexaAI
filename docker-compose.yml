@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  pocketbase:
+    build:
+      context: .
+      dockerfile: Dockerfile.pocketbase
+    ports:
+      - "8090:8090"
+    volumes:
+      - pb_data:/pb/pb_data
+    restart: unless-stopped
+
+  nexa-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - PocketBase__BaseUrl=http://pocketbase:8090
+    depends_on:
+      - pocketbase
+    restart: unless-stopped
+
+volumes:
+  pb_data:
