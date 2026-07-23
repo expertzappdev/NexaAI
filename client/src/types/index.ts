@@ -1,13 +1,13 @@
 export interface User {
-  id: number;
+  id: number | string;
   name: string;
   email: string;
-  createdAt: string;
+  createdAt?: string;
 }
 
 export interface Conversation {
-  id: number;
-  userId: number;
+  id: number | string;
+  userId: number | string;
   title: string;
   selectedModel?: string;
   isPinned: boolean;
@@ -19,8 +19,8 @@ export interface Conversation {
 }
 
 export interface Message {
-  id: number;
-  conversationId: number;
+  id: number | string;
+  conversationId: number | string;
   role: 'system' | 'user' | 'assistant';
   content: string;
   promptTokens?: number;
@@ -40,7 +40,7 @@ export interface AuthResponse {
   token?: string;
   errorMessage?: string;
   user?: {
-    id: number;
+    id: number | string;
     name: string;
     email: string;
   };
@@ -56,9 +56,9 @@ export interface ChatResponse {
 }
 
 export interface SavedMessage {
-  id: number;
-  messageId: number;
-  conversationId: number;
+  id: number | string;
+  messageId: number | string;
+  conversationId: number | string;
   conversationTitle: string;
   content: string;
   createdAt: string;

@@ -75,6 +75,7 @@ builder.Services.AddScoped<ITavilyService, TavilyService>();
 builder.Services.AddScoped<IWebSearchDecisionService, WebSearchDecisionService>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IPocketBaseAuthService, PocketBaseAuthService>();
 
 // Configure Authentication & JWT Token Validation
 var jwtSection = builder.Configuration.GetSection("Jwt");

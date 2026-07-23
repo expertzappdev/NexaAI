@@ -17,18 +17,18 @@ interface ChatContextType {
   user: User | null;
   token: string | null;
   conversations: Conversation[];
-  activeConversationId: number | null;
+  activeConversationId: number | string | null;
   messages: Message[];
   isLoading: boolean;
   socketConnected: boolean;
-  login: (token: string, user: { id: number; name: string; email: string }) => void;
+  login: (token: string, user: { id: number | string; name: string; email: string }) => void;
   logout: () => void;
   loadConversations: () => Promise<void>;
-  selectConversation: (id: number) => Promise<void>;
-  createConversation: (title: string) => Promise<number | null>;
-  renameConversation: (id: number, title: string) => Promise<boolean>;
-  deleteConversation: (id: number) => Promise<boolean>;
-  pinConversation: (id: number, isPinned: boolean) => Promise<boolean>;
+  selectConversation: (id: number | string) => Promise<void>;
+  createConversation: (title: string) => Promise<number | string | null>;
+  renameConversation: (id: number | string, title: string) => Promise<boolean>;
+  deleteConversation: (id: number | string) => Promise<boolean>;
+  pinConversation: (id: number | string, isPinned: boolean) => Promise<boolean>;
   sendMessage: (text: string) => Promise<void>;
   stopGenerating: () => Promise<void>;
   clearMessages: () => void;
@@ -41,19 +41,19 @@ interface ChatContextType {
   setSearchQuery: (query: string) => void;
   archivedConversations: Conversation[];
   loadArchivedConversations: () => Promise<void>;
-  archiveConversation: (id: number) => Promise<boolean>;
-  restoreConversation: (id: number) => Promise<boolean>;
-  regeneratingMessageId: number | null;
-  regenerateResponse: (messageId: number) => Promise<void>;
-  editingMessageId: number | null;
-  setEditingMessageId: (id: number | null) => void;
-  editMessage: (messageId: number, content: string) => Promise<void>;
+  archiveConversation: (id: number | string) => Promise<boolean>;
+  restoreConversation: (id: number | string) => Promise<boolean>;
+  regeneratingMessageId: number | string | null;
+  regenerateResponse: (messageId: number | string) => Promise<void>;
+  editingMessageId: number | string | null;
+  setEditingMessageId: (id: number | string | null) => void;
+  editMessage: (messageId: number | string, content: string) => Promise<void>;
   savedMessages: SavedMessage[];
-  saveMessage: (messageId: number) => Promise<boolean>;
-  unsaveMessage: (messageId: number) => Promise<boolean>;
-  toggleFeedback: (messageId: number, type: 'Like' | 'Dislike') => Promise<boolean>;
-  scrollToMessageId: number | null;
-  setScrollToMessageId: (id: number | null) => void;
+  saveMessage: (messageId: number | string) => Promise<boolean>;
+  unsaveMessage: (messageId: number | string) => Promise<boolean>;
+  toggleFeedback: (messageId: number | string, type: 'Like' | 'Dislike') => Promise<boolean>;
+  scrollToMessageId: number | string | null;
+  setScrollToMessageId: (id: number | string | null) => void;
   isTemporaryMode: boolean;
   setIsTemporaryMode: (active: boolean) => void;
 }
@@ -64,7 +64,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<number | string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -74,10 +74,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
-  const [regeneratingMessageId, setRegeneratingMessageId] = useState<number | null>(null);
-  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
+  const [regeneratingMessageId, setRegeneratingMessageId] = useState<number | string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<number | string | null>(null);
   const [savedMessages, setSavedMessages] = useState<SavedMessage[]>([]);
-  const [scrollToMessageId, setScrollToMessageId] = useState<number | null>(null);
+  const [scrollToMessageId, setScrollToMessageId] = useState<number | string | null>(null);
   const [isTemporaryMode, setIsTemporaryModeState] = useState<boolean>(false);
   const isTemporaryModeRef = useRef<boolean>(false);
 
@@ -93,7 +93,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Store activeConversationId, regeneratingMessageId, and editingMessageId in refs to avoid stale closures in socket event handlers
-  const activeConversationIdRef = useRef<number | null>(null);
+  const activeConversationIdRef = useRef<number | string | null>(null);
   const selectedModelRef = useRef<string>(selectedModel);
   useEffect(() => {
     activeConversationIdRef.current = activeConversationId;
@@ -170,12 +170,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 60); // 60ms is right in the 40-80ms range for a natural typing pace
   };
 
-  const regeneratingMessageIdRef = useRef<number | null>(null);
+  const regeneratingMessageIdRef = useRef<number | string | null>(null);
   useEffect(() => {
     regeneratingMessageIdRef.current = regeneratingMessageId;
   }, [regeneratingMessageId]);
 
-  const editingMessageIdRef = useRef<number | null>(null);
+  const editingMessageIdRef = useRef<number | string | null>(null);
   useEffect(() => {
     editingMessageIdRef.current = editingMessageId;
   }, [editingMessageId]);
@@ -521,7 +521,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const login = (tokenValue: string, userObj: { id: number; name: string; email: string }) => {
+  const login = (tokenValue: string, userObj: { id: number | string; name: string; email: string }) => {
     localStorage.setItem('chatbot_token', tokenValue);
     const mappedUser: User = { 
       id: userObj.id, 
@@ -571,7 +571,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const archiveConversation = async (id: number): Promise<boolean> => {
+  const archiveConversation = async (id: number | string): Promise<boolean> => {
     try {
       await apiClient.put(`/conversations/${id}/archive`);
       const conversationToArchive = conversations.find((c) => c.id === id);
@@ -601,7 +601,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const restoreConversation = async (id: number): Promise<boolean> => {
+  const restoreConversation = async (id: number | string): Promise<boolean> => {
     try {
       await apiClient.put(`/conversations/${id}/restore`);
       const conversationToRestore = archivedConversations.find((c) => c.id === id);
@@ -633,7 +633,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const saveMessage = async (messageId: number): Promise<boolean> => {
+  const saveMessage = async (messageId: number | string): Promise<boolean> => {
     try {
       await apiClient.post('/messages/save', { messageId });
       showToast('Response saved.', 'success');
@@ -646,7 +646,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const unsaveMessage = async (messageId: number): Promise<boolean> => {
+  const unsaveMessage = async (messageId: number | string): Promise<boolean> => {
     try {
       await apiClient.delete(`/messages/save/${messageId}`);
       showToast('Removed from saved.', 'success');
@@ -659,7 +659,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const toggleFeedback = async (messageId: number, type: 'Like' | 'Dislike'): Promise<boolean> => {
+  const toggleFeedback = async (messageId: number | string, type: 'Like' | 'Dislike'): Promise<boolean> => {
     const msg = messages.find((m) => m.id === messageId);
     if (!msg) return false;
 
@@ -696,7 +696,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const selectConversation = async (id: number) => {
+  const selectConversation = async (id: number | string) => {
     setIsTemporaryModeState(false);
     isTemporaryModeRef.current = false;
     setActiveConversationId(id);
@@ -716,7 +716,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const createConversation = async (title: string): Promise<number | null> => {
+  const createConversation = async (title: string): Promise<number | string | null> => {
     try {
       const response = await apiClient.post<Conversation>('/conversations', { title });
       const newConv = response.data;
@@ -731,7 +731,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const renameConversation = async (id: number, title: string): Promise<boolean> => {
+  const renameConversation = async (id: number | string, title: string): Promise<boolean> => {
     try {
       await apiClient.put(`/conversations/${id}`, { title });
       setConversations((prev) =>
@@ -746,7 +746,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const deleteConversation = async (id: number): Promise<boolean> => {
+  const deleteConversation = async (id: number | string): Promise<boolean> => {
     try {
       await apiClient.delete(`/conversations/${id}`);
       setConversations((prev) => prev.filter((c) => c.id !== id));
@@ -775,7 +775,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const pinConversation = async (id: number, isPinned: boolean): Promise<boolean> => {
+  const pinConversation = async (id: number | string, isPinned: boolean): Promise<boolean> => {
     try {
       await apiClient.patch(`/conversations/${id}/pin`, { isPinned });
       setConversations((prev) =>
@@ -839,7 +839,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const regenerateResponse = async (messageId: number) => {
+  const regenerateResponse = async (messageId: number | string) => {
     if (regeneratingMessageId !== null) return;
     setRegeneratingMessageId(messageId);
     try {
@@ -851,7 +851,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const editMessage = async (messageId: number, content: string) => {
+  const editMessage = async (messageId: number | string, content: string) => {
     if (isLoading) return;
     setEditingMessageId(messageId);
     try {
