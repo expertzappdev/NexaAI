@@ -102,7 +102,7 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero
     };
 
-    // Integrate authentication for SignalR WebSockets (query string token extractor)
+    // Integrate authentication for SignalR WebSockets and PocketBase token validation fallback
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
@@ -114,6 +114,35 @@ builder.Services.AddAuthentication(options =>
                 context.Token = accessToken;
             }
             return Task.CompletedTask;
+        },
+        OnAuthenticationFailed = async context =>
+        {
+            try
+            {
+                var pbAuthService = context.HttpContext.RequestServices.GetRequiredService<IPocketBaseAuthService>();
+                var token = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "").Trim();
+                if (string.IsNullOrEmpty(token) && !string.IsNullOrEmpty(context.Request.Query["access_token"]))
+                {
+                    token = context.Request.Query["access_token"];
+                }
+
+                if (!string.IsNullOrEmpty(token) && await pbAuthService.ValidateTokenAsync(token))
+                {
+                    var userId = await pbAuthService.GetUserIdFromTokenAsync(token) ?? "1";
+                    var claims = new[]
+                    {
+                        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, userId),
+                        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "PocketBase User"),
+                    };
+                    var identity = new System.Security.Claims.ClaimsIdentity(claims, JwtBearerDefaults.AuthenticationScheme);
+                    context.Principal = new System.Security.Claims.ClaimsPrincipal(identity);
+                    context.Success();
+                }
+            }
+            catch
+            {
+                // PocketBase validation fallback error
+            }
         }
     };
 });

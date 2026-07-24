@@ -31,11 +31,10 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      localStorage.removeItem('chatbot_token');
-      localStorage.removeItem('chatbot_user');
-      // Redirect to home page if window is available
-      if (typeof window !== 'undefined') {
-        window.location.href = '/';
+      // Only clear legacy local storage token if PocketBase auth store is not valid
+      if (!pb.authStore.isValid) {
+        localStorage.removeItem('chatbot_token');
+        localStorage.removeItem('chatbot_user');
       }
     }
     return Promise.reject(error);
