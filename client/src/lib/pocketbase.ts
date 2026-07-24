@@ -1,8 +1,6 @@
 import PocketBase from 'pocketbase';
 
-const defaultUrl = typeof window !== 'undefined'
-  ? `${window.location.protocol}//${window.location.hostname}:8090`
-  : 'http://localhost:8090';
+const defaultUrl = 'https://nexaai-production-d7c5.up.railway.app';
 
 export const POCKETBASE_URL = import.meta.env?.VITE_POCKETBASE_URL || defaultUrl;
 
