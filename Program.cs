@@ -119,24 +119,53 @@ builder.Services.AddAuthentication(options =>
         {
             try
             {
-                var pbAuthService = context.HttpContext.RequestServices.GetRequiredService<IPocketBaseAuthService>();
-                var token = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "").Trim();
+                var authHeader = context.Request.Headers["Authorization"].ToString();
+                var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                    ? authHeader.Substring(7).Trim()
+                    : authHeader.Trim();
+
                 if (string.IsNullOrEmpty(token) && !string.IsNullOrEmpty(context.Request.Query["access_token"]))
                 {
                     token = context.Request.Query["access_token"];
                 }
 
-                if (!string.IsNullOrEmpty(token) && await pbAuthService.ValidateTokenAsync(token))
+                if (!string.IsNullOrEmpty(token))
                 {
-                    var userId = await pbAuthService.GetUserIdFromTokenAsync(token) ?? "1";
-                    var claims = new[]
+                    var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                    if (handler.CanReadToken(token))
                     {
-                        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, userId),
-                        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "PocketBase User"),
-                    };
-                    var identity = new System.Security.Claims.ClaimsIdentity(claims, JwtBearerDefaults.AuthenticationScheme);
-                    context.Principal = new System.Security.Claims.ClaimsPrincipal(identity);
-                    context.Success();
+                        var jwtToken = handler.ReadJwtToken(token);
+                        if (jwtToken.ValidTo > DateTime.UtcNow)
+                        {
+                            var userId = jwtToken.Claims.FirstOrDefault(c => c.Type == "id")?.Value
+                                      ?? jwtToken.Claims.FirstOrDefault(c => c.Type == "sub")?.Value
+                                      ?? "1";
+
+                            var claims = new[]
+                            {
+                                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, userId),
+                                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "PocketBase User"),
+                            };
+                            var identity = new System.Security.Claims.ClaimsIdentity(claims, JwtBearerDefaults.AuthenticationScheme);
+                            context.Principal = new System.Security.Claims.ClaimsPrincipal(identity);
+                            context.Success();
+                            return;
+                        }
+                    }
+
+                    var pbAuthService = context.HttpContext.RequestServices.GetService<IPocketBaseAuthService>();
+                    if (pbAuthService != null && await pbAuthService.ValidateTokenAsync(token))
+                    {
+                        var userId = await pbAuthService.GetUserIdFromTokenAsync(token) ?? "1";
+                        var claims = new[]
+                        {
+                            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, userId),
+                            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "PocketBase User"),
+                        };
+                        var identity = new System.Security.Claims.ClaimsIdentity(claims, JwtBearerDefaults.AuthenticationScheme);
+                        context.Principal = new System.Security.Claims.ClaimsPrincipal(identity);
+                        context.Success();
+                    }
                 }
             }
             catch
