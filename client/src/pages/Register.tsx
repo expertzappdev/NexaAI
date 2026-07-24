@@ -40,49 +40,43 @@ const Register: React.FC = () => {
     setLoading(true);
 
     try {
-      // 1. Try primary PocketBase User Registration
+      // 1. Primary PocketBase User Registration
+      const pbResult = await pocketbaseAuth.registerUser(
+        email.trim(),
+        password,
+        confirmPassword,
+        name.trim()
+      );
+      if (pbResult.token && pbResult.record) {
+        const userObj = {
+          id: pbResult.record.id,
+          email: pbResult.record.email,
+          name: pbResult.record.name || name.trim(),
+        };
+        login(pbResult.token, userObj);
+        navigate('/chat');
+        return;
+      }
+    } catch (pbErr: any) {
+      // Fallback to ASP.NET Core registration endpoint if legacy support is needed
       try {
-        const pbResult = await pocketbaseAuth.registerUser(
-          email.trim(),
+        const response = await apiClient.post<AuthResponse>('/auth/register', {
+          name: name.trim(),
+          email: email.trim(),
           password,
-          confirmPassword,
-          name.trim()
-        );
-        if (pbResult.token && pbResult.record) {
-          const userObj = {
-            id: pbResult.record.id,
-            email: pbResult.record.email,
-            name: pbResult.record.name || name.trim(),
-          };
-          login(pbResult.token, userObj);
+        });
+
+        if (response.data.success && response.data.token && response.data.user) {
+          login(response.data.token, response.data.user);
           navigate('/chat');
           return;
         }
-      } catch (pbErr: any) {
-        console.warn('PocketBase registration warning:', pbErr?.message || pbErr);
+      } catch (backendErr: any) {
+        // Fallback failed
       }
 
-      // 2. Fallback to ASP.NET Core registration endpoint
-      const response = await apiClient.post<AuthResponse>('/auth/register', {
-        name: name.trim(),
-        email: email.trim(),
-        password,
-      });
-
-      if (response.data.success && response.data.token && response.data.user) {
-        login(response.data.token, response.data.user);
-        navigate('/chat');
-      } else {
-        setError(response.data.errorMessage || 'Registration failed.');
-      }
-    } catch (err: any) {
-      setError(
-        err.response?.data?.errorMessage || 
-        err.response?.data?.Email?.[0] ||
-        err.response?.data?.Password?.[0] ||
-        err?.message ||
-        'An error occurred. Check connection or if the email is already in use.'
-      );
+      const errMsg = pbErr?.message || pbErr?.data?.message || 'Registration failed. Email may already be registered or invalid.';
+      setError(errMsg);
     } finally {
       setLoading(false);
     }

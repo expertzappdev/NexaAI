@@ -29,43 +29,37 @@ const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      // 1. Try primary PocketBase authentication
+      // 1. Primary PocketBase authentication
+      const pbResult = await pocketbaseAuth.loginWithPassword(email.trim(), password);
+      if (pbResult.token && pbResult.record) {
+        const userObj = {
+          id: pbResult.record.id,
+          email: pbResult.record.email,
+          name: pbResult.record.name || pbResult.record.email.split('@')[0],
+        };
+        login(pbResult.token, userObj);
+        navigate('/chat');
+        return;
+      }
+    } catch (pbErr: any) {
+      // Try backend fallback if user is a legacy account
       try {
-        const pbResult = await pocketbaseAuth.loginWithPassword(email.trim(), password);
-        if (pbResult.token && pbResult.record) {
-          const userObj = {
-            id: pbResult.record.id,
-            email: pbResult.record.email,
-            name: pbResult.record.name || pbResult.record.email.split('@')[0],
-          };
-          login(pbResult.token, userObj);
+        const response = await apiClient.post<AuthResponse>('/auth/login', {
+          email: email.trim(),
+          password,
+        });
+
+        if (response.data.success && response.data.token && response.data.user) {
+          login(response.data.token, response.data.user);
           navigate('/chat');
           return;
         }
-      } catch (pbErr: any) {
-        // If PocketBase returns invalid credentials or isn't reached, log warning and try backend fallback
-        console.warn('PocketBase auth warning:', pbErr?.message || pbErr);
+      } catch (backendErr: any) {
+        // Fallback failed as well
       }
 
-      // 2. Fallback to ASP.NET Core auth endpoint if legacy user
-      const response = await apiClient.post<AuthResponse>('/auth/login', {
-        email: email.trim(),
-        password,
-      });
-
-      if (response.data.success && response.data.token && response.data.user) {
-        login(response.data.token, response.data.user);
-        navigate('/chat');
-      } else {
-        setError(response.data.errorMessage || 'Invalid credentials.');
-      }
-    } catch (err: any) {
-      setError(
-        err.response?.data?.errorMessage || 
-        err.response?.data?.Email?.[0] ||
-        err?.message ||
-        'Failed to log in. Please check your credentials or PocketBase server.'
-      );
+      const errMsg = pbErr?.message || pbErr?.data?.message || 'Invalid email or password. Please check your credentials or PocketBase connection.';
+      setError(errMsg);
     } finally {
       setLoading(false);
     }
