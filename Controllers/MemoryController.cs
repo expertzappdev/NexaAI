@@ -27,11 +27,17 @@ namespace AIChatBot.Controllers
         private int GetCurrentUserId()
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+            if (userIdClaim == null || string.IsNullOrWhiteSpace(userIdClaim.Value))
             {
                 throw new UnauthorizedAccessException("User identification claim is missing or invalid.");
             }
-            return userId;
+
+            if (int.TryParse(userIdClaim.Value, out var userId))
+            {
+                return userId;
+            }
+
+            return Math.Abs(userIdClaim.Value.GetHashCode());
         }
 
         [HttpGet]
