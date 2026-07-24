@@ -13,6 +13,7 @@ namespace AIChatBot.Services
 {
     public class ConversationService : IConversationService
     {
+        private readonly IRepository<User> _userRepository;
         private readonly IRepository<Conversation> _conversationRepository;
         private readonly IRepository<Message> _messageRepository;
         private readonly IGroqService _groqService;
@@ -23,6 +24,7 @@ namespace AIChatBot.Services
         private readonly ILogger<ConversationService> _logger;
 
         public ConversationService(
+            IRepository<User> userRepository,
             IRepository<Conversation> conversationRepository,
             IRepository<Message> messageRepository,
             IGroqService groqService,
@@ -32,6 +34,7 @@ namespace AIChatBot.Services
             IRepository<UserMemory> userMemoryRepository,
             ILogger<ConversationService> logger)
         {
+            _userRepository = userRepository;
             _conversationRepository = conversationRepository;
             _messageRepository = messageRepository;
             _groqService = groqService;
@@ -42,11 +45,41 @@ namespace AIChatBot.Services
             _logger = logger;
         }
 
+        private async Task EnsureUserExistsAsync(int userId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var exists = await _userRepository.GetQueryable()
+                    .AsNoTracking()
+                    .AnyAsync(u => u.Id == userId, cancellationToken);
+
+                if (!exists)
+                {
+                    var user = new User
+                    {
+                        Id = userId,
+                        Name = "PocketBase User",
+                        Email = $"pb_user_{userId}@pocketbase.io",
+                        PasswordHash = "POCKETBASE_AUTH",
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _userRepository.AddAsync(user, cancellationToken);
+                    await _userRepository.SaveChangesAsync(cancellationToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Shadow user check handled for userId {UserId}", userId);
+            }
+        }
+
         public async Task<ConversationResponse> CreateConversationAsync(
             int userId, 
             string title, 
             CancellationToken cancellationToken = default)
         {
+            await EnsureUserExistsAsync(userId, cancellationToken);
+
             var conversation = new Conversation
             {
                 UserId = userId,
